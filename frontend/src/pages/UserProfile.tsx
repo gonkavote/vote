@@ -81,23 +81,36 @@ export function UserProfilePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.tenders.map((it) => (
+            {data.tenders.map((it) => {
+              const expired = it.status === 'closed' || (!!it.closes_at && new Date(it.closes_at).getTime() <= Date.now())
+              const showExpiredBadge = expired && it.status === 'open'
+              const showClosedBadge = it.status === 'closed'
+              const showOpenBadge = !expired && it.status === 'open'
+              return (
               <Link
                 key={it.id}
                 to={`/tenders/${it.id}`}
                 className="card card-hover block"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span
-                    className={`pill ${
-                      it.status === 'open'
-                        ? 'bg-emerald-500/10 text-emerald-400'
-                        : 'bg-white/5 text-text-2'
-                    }`}
-                  >
-                    {t(`tender.status.${it.status}`)}
-                  </span>
-                  <span className="text-xs text-text-2">
+                <div className="flex items-center justify-between mb-3 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {showOpenBadge && (
+                      <span className="pill flex-shrink-0 bg-emerald-500/10 text-emerald-400">
+                        {t('tender.status.open')}
+                      </span>
+                    )}
+                    {showClosedBadge && (
+                      <span className="pill flex-shrink-0 bg-white/5 text-text-2">
+                        {t('tender.status.closed')}
+                      </span>
+                    )}
+                    {showExpiredBadge && (
+                      <span className="pill flex-shrink-0 bg-rose-500/15 text-rose-400">
+                        {t('countdown.expired')}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-text-2 flex-shrink-0">
                     {formatRelative(it.created_at)}
                   </span>
                 </div>
@@ -111,7 +124,7 @@ export function UserProfilePage() {
                 )}
                 <TallyStats tally={it.tally} layout="inline" />
               </Link>
-            ))}
+            )})}
           </div>
         )}
       </section>
