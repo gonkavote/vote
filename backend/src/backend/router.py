@@ -1,0 +1,872 @@
+"""HTTP API for Gonka Vote.
+
+Email is treated as private — it is exposed only via /api/me (the current
+user's own session). All public-facing endpoints identify users by their
+opaque `uid` instead.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timedelta, timezone
+
+MIN_DEADLINE_DELTA = timedelta(days=7)
+# Slack so the "1 week" preset on the frontend (which captures `now + 7d` at
+# render time) doesn't 422 if the user spends a few minutes filling out the
+# form before submitting. Without this, every "1 week" submission that takes
+# >0s from preset-click to publish would be rejected.
+DEADLINE_GRACE = timedelta(hours=2)
+from typing import Optional
+from uuid import UUID, uuid4
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+
+from backend.auth import current_admin, current_user, current_user_optional, _ensure_ch  # type: ignore
+from backend.lang_detect import supported_languages
+from backend.models import (
+    CommentCreate,
+    CommentOut,
+    ReactionUpsert,
+    TenderCreate,
+    TenderDetail,
+    TenderSummary,
+    TenderTally,
+    UserOut,
+    UserPublicProfile,
+    UserUpdate,
+    VoterEntry,
+)
+from backend.settings import (
+    effective_backend_chain_api_url,
+    effective_backend_rpc_url,
+    settings,
+)
+from backend.translation_queue import enqueue_detect
+from backend.notifications import enqueue_comment_notifications
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api")
+
+
+# ----------------------------------------------------------------------------
+# Health / config (no auth)
+# ----------------------------------------------------------------------------
+
+@router.get("/health")
+async def health():
+    ch = _ensure_ch()
+    ok = await ch.ping()
+    return {"ok": ok}
+
+
+@router.get("/config")
+async def public_config():
+    # Bot id is the numeric prefix of the bot token (everything before
+    # the ':'). Public — Telegram itself exposes it as `bot_id` in widget
+    # URLs, no secret material here.
+    tg_token = settings.telegram_bot_token
+    tg_bot_id = 0
+    if tg_token and ":" in tg_token:
+        try:
+            tg_bot_id = int(tg_token.split(":", 1)[0])
+        except ValueError:
+            tg_bot_id = 0
+
+    return {
+        "contract_address": settings.contract_address,
+        "chain_id": settings.chain_id,
+        "rpc_url": effective_backend_rpc_url(),
+        # Same-origin HTTPS proxy. The browser would otherwise refuse to
+        # talk to the plain-HTTP chain endpoint (mixed-content block).
+        "rest_url": "/api/chain",
+        # Empty when Telegram login is not configured — frontend hides
+        # the widget in that case and only shows Google.
+        "telegram_bot_username": settings.telegram_bot_username,
+        "telegram_bot_id": tg_bot_id,
+        # Tracker UI base ("" if not configured — frontend hides the
+        # explorer links).
+        "tracker_ui_url": settings.tracker_ui_url,
+        # WalletConnect projectId for the in-app wallet flow ("" disables WC).
+        "wc_project_id": settings.wc_project_id,
+        # Public site URL — used by the SPA for canonical / OG / share links.
+        "public_base_url": settings.public_base_url,
+    }
+
+
+# ----------------------------------------------------------------------------
+# Chain REST proxy — strips the /api/chain prefix and forwards to the
+# upstream node so the browser can stay on the same origin/scheme as the
+# site (which is HTTPS via Cloudflare; the chain itself is HTTP-only).
+# ----------------------------------------------------------------------------
+
+_chain_client: Optional[httpx.AsyncClient] = None
+
+
+def _chain_http() -> httpx.AsyncClient:
+    global _chain_client
+    if _chain_client is None:
+        _chain_client = httpx.AsyncClient(
+            base_url=effective_backend_chain_api_url(),
+            timeout=httpx.Timeout(30.0),
+        )
+    return _chain_client
+
+
+@router.api_route(
+    "/chain/{path:path}",
+    methods=["GET", "POST"],
+    include_in_schema=False,
+)
+async def chain_proxy(path: str, request: Request) -> Response:
+    upstream = _chain_http()
+    qs = request.url.query
+    target = f"/{path}" + (f"?{qs}" if qs else "")
+    body = await request.body() if request.method == "POST" else None
+    try:
+        if request.method == "GET":
+            r = await upstream.get(target)
+        else:
+            r = await upstream.post(
+                target,
+                content=body,
+                headers={"Content-Type": request.headers.get("content-type", "application/json")},
+            )
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"chain upstream error: {e}")
+    # Pass through the upstream response verbatim — keeps headers,
+    # status codes and bodies intact.
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        media_type=r.headers.get("content-type"),
+    )
+
+
+# ----------------------------------------------------------------------------
+# /me — private, includes email
+# ----------------------------------------------------------------------------
+
+@router.get("/me")
+async def me(user: dict = Depends(current_user)) -> UserOut:
+    return UserOut(**user)
+
+
+@router.get("/me/optional")
+async def me_optional(user: Optional[dict] = Depends(current_user_optional)) -> Optional[UserOut]:
+    return UserOut(**user) if user else None
+
+
+@router.patch("/me")
+async def update_me(payload: UserUpdate, user: dict = Depends(current_user)) -> UserOut:
+    ch = _ensure_ch()
+    await ch.insert(
+        "users",
+        ["email", "name", "image", "wallet_address", "uid", "is_admin"],
+        [[
+            user["email"],
+            user.get("name"),
+            user.get("image"),
+            payload.wallet_address,
+            user["uid"],
+            bool(user.get("is_admin")),
+        ]],
+    )
+    refreshed = await ch.query_one(
+        """
+        SELECT uid, email, name, image, wallet_address, is_admin
+        FROM gonka_vote.users FINAL
+        WHERE email = {email:String}
+        """,
+        {"email": user["email"]},
+    )
+    return UserOut(**refreshed)
+
+
+# ----------------------------------------------------------------------------
+# Tenders
+# ----------------------------------------------------------------------------
+
+# --- shared SQL fragments -----------------------------------------------------
+# Community weight = balance + collateral + vesting (legacy weight_ngonka column
+# is already populated with this sum by the indexer; we use it directly).
+# Hosts weight     = network weight × confirmation_poc_ratio (host_weight col).
+# Weighted avg bid uses community weight as the denominator; hosts weight is
+# tracked separately and does not influence the avg today.
+_TALLY_AGG_COLS = """
+    count()                                                              AS voter_count,
+    sum(amount_ngonka)                                                   AS sum_bid,
+    sum(weight_ngonka)                                                   AS community_w,
+    sum(host_weight)                                                     AS hosts_w,
+    if(sum(weight_ngonka) = 0, toUInt256(0),
+       intDiv(sum(toUInt256(amount_ngonka) * toUInt256(weight_ngonka)),
+              toUInt256(sum(weight_ngonka))))                            AS weighted_avg,
+    max(refreshed_at)                                                    AS refreshed_at
+"""
+
+# Per-tender tally aggregate (single row).
+_TALLY_SQL = f"""
+SELECT
+    {_TALLY_AGG_COLS.replace('AS voter_count', 'AS voter_count').strip()}
+FROM gonka_vote.vote_snapshots FINAL
+WHERE tender_id = {{tid:String}}
+"""
+
+
+@router.get("/tenders")
+async def list_tenders(lang: Optional[str] = None) -> list[TenderSummary]:
+    ch = _ensure_ch()
+    target_lang = (lang or "").strip().lower()
+    rows = await ch.query_rows(
+        """
+        WITH tender_tallies AS (
+            SELECT
+                tender_id,
+                count()                                          AS voter_count,
+                sum(amount_ngonka)                               AS sum_bid,
+                sum(weight_ngonka)                               AS community_w,
+                sum(host_weight)                                 AS hosts_w,
+                if(sum(weight_ngonka) = 0, toUInt256(0),
+                   intDiv(sum(toUInt256(amount_ngonka) * toUInt256(weight_ngonka)),
+                          toUInt256(sum(weight_ngonka))))        AS weighted_avg,
+                max(refreshed_at)                                AS refreshed_at
+            FROM gonka_vote.vote_snapshots FINAL
+            GROUP BY tender_id
+        ),
+        tender_jobs AS (
+            -- Job status per tender for the requested target_lang.
+            SELECT entity_id, status
+            FROM gonka_vote.translation_jobs FINAL
+            WHERE kind = 'tender' AND target_lang = {lang:String}
+        ),
+        comment_counts AS (
+            SELECT tender_id, count() AS cnt
+            FROM gonka_vote.comments
+            WHERE deleted_at IS NULL
+            GROUP BY tender_id
+        )
+        SELECT
+            t.id            AS id,
+            t.title         AS title,
+            t.summary       AS summary,
+            t.source_lang   AS source_lang,
+            ttx.title       AS title_t,
+            ttx.summary     AS summary_t,
+            COALESCE(NULLIF(t.creator_uid, ''), u.uid, '')  AS creator_uid,
+            u.name                                          AS creator_name,
+            u.image                                         AS creator_image,
+            t.status        AS status,
+            t.created_at    AS created_at,
+            t.closes_at     AS closes_at,
+            COALESCE(tt.voter_count, 0)              AS voter_count,
+            toString(COALESCE(tt.sum_bid, 0))        AS sum_bid,
+            toString(COALESCE(tt.community_w, 0))    AS community_w,
+            toString(COALESCE(tt.hosts_w, 0))        AS hosts_w,
+            toString(COALESCE(tt.weighted_avg, 0))   AS weighted_avg,
+            tt.refreshed_at                          AS refreshed_at,
+            COALESCE(tj.status, '')                  AS job_status,
+            COALESCE(cc.cnt, 0)                      AS comment_count
+        FROM gonka_vote.tenders AS t FINAL
+        LEFT JOIN gonka_vote.users  AS u  FINAL ON u.email = t.creator_email
+        LEFT JOIN tender_tallies    AS tt        ON tt.tender_id = toString(t.id)
+        LEFT JOIN tender_jobs       AS tj        ON tj.entity_id = t.id
+        LEFT JOIN comment_counts    AS cc        ON cc.tender_id = t.id
+        LEFT JOIN gonka_vote.tender_translations AS ttx FINAL
+                  ON ttx.tender_id = t.id AND ttx.target_lang = {lang:String}
+        WHERE t.deleted_at IS NULL
+        ORDER BY t.created_at DESC
+        """,
+        {"lang": target_lang},
+    )
+    return [_row_to_summary(r, target_lang) for r in rows]
+
+
+@router.post("/tenders", status_code=201)
+async def create_tender(
+    payload: TenderCreate,
+    user: dict = Depends(current_user),
+) -> TenderSummary:
+    if payload.closes_at is None:
+        raise HTTPException(422, "closes_at is required")
+    closes_at = payload.closes_at
+    if closes_at.tzinfo is None:
+        closes_at = closes_at.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    if closes_at - now < MIN_DEADLINE_DELTA - DEADLINE_GRACE:
+        raise HTTPException(
+            422,
+            f"closes_at must be at least {MIN_DEADLINE_DELTA.days} days from now",
+        )
+
+    ch = _ensure_ch()
+    new_id = uuid4()
+    # We don't try to detect the language here — that's a network call to
+    # Gemini and we want create_tender to stay fast (<500ms p99). Insert with
+    # source_lang='', enqueue a single 'detect' job; the worker will resolve
+    # source_lang and then enqueue the per-language translation jobs.
+    await ch.insert(
+        "tenders",
+        ["id", "title", "summary", "description", "creator_email", "creator_wallet",
+         "status", "created_at", "closes_at", "creator_uid", "source_lang"],
+        [[
+            new_id,
+            payload.title,
+            payload.summary,
+            payload.description,
+            user["email"],
+            user.get("wallet_address"),
+            "open",
+            now,
+            closes_at,
+            user["uid"],
+            "",
+        ]],
+    )
+    try:
+        await enqueue_detect(ch, "tender", new_id)
+    except Exception as e:
+        logger.warning("enqueue_detect(tender) failed for %s: %s", new_id, e)
+    return TenderSummary(
+        id=new_id,
+        title=payload.title,
+        summary=payload.summary,
+        creator_uid=user["uid"],
+        creator_name=user.get("name"),
+        creator_image=user.get("image"),
+        status="open",
+        created_at=now,
+        closes_at=closes_at,
+        tally=TenderTally(),
+        source_lang="",
+        translation_status="pending" if len(supported_languages()) > 1 else "ready",
+    )
+
+
+@router.get("/tenders/{tender_id}")
+async def get_tender(tender_id: UUID, lang: Optional[str] = None) -> TenderDetail:
+    ch = _ensure_ch()
+    target_lang = (lang or "").strip().lower()
+    t = await ch.query_one(
+        """
+        SELECT
+            t.id              AS id,
+            t.title           AS title,
+            t.summary         AS summary,
+            t.description     AS description,
+            t.source_lang     AS source_lang,
+            ttx.title         AS title_t,
+            ttx.summary       AS summary_t,
+            ttx.description   AS description_t,
+            COALESCE(NULLIF(t.creator_uid, ''), u.uid, '') AS creator_uid,
+            u.name            AS creator_name,
+            u.image           AS creator_image,
+            t.creator_wallet  AS creator_wallet,
+            t.status          AS status,
+            t.created_at      AS created_at,
+            t.closes_at       AS closes_at,
+            COALESCE(tj.status, '') AS job_status
+        FROM gonka_vote.tenders AS t FINAL
+        LEFT JOIN gonka_vote.users AS u FINAL ON u.email = t.creator_email
+        LEFT JOIN gonka_vote.translation_jobs AS tj FINAL
+                  ON tj.kind = 'tender' AND tj.entity_id = t.id AND tj.target_lang = {lang:String}
+        LEFT JOIN gonka_vote.tender_translations AS ttx FINAL
+                  ON ttx.tender_id = t.id AND ttx.target_lang = {lang:String}
+        WHERE t.id = {id:UUID} AND t.deleted_at IS NULL
+        """,
+        {"id": str(tender_id), "lang": target_lang},
+    )
+    if not t:
+        raise HTTPException(404, "tender not found")
+
+    tally_row = await ch.query_one(_TALLY_SQL, {"tid": str(tender_id)})
+    tally = _row_to_tally(tally_row) if tally_row else TenderTally()
+
+    voters = await ch.query_rows(
+        """
+        SELECT voter,
+               toString(amount_ngonka)  AS amount_ngonka,
+               toString(weight_ngonka)  AS community_weight_ngonka,
+               toString(host_weight)    AS hosts_weight_ngonka,
+               nullIf(tx_hash, '')      AS tx_hash,
+               voted_at                 AS voted_at
+        FROM gonka_vote.vote_snapshots FINAL
+        WHERE tender_id = {id:String}
+        ORDER BY weight_ngonka DESC, amount_ngonka DESC
+        """,
+        {"id": str(tender_id)},
+    )
+
+    comment_count = await ch.query_scalar(
+        "SELECT count() FROM gonka_vote.comments "
+        "WHERE tender_id = {id:UUID} AND deleted_at IS NULL",
+        {"id": str(tender_id)},
+    )
+
+    source_lang = (t.get("source_lang") or "")
+    job_status = t.get("job_status") or ""
+    title_show, t_is_t, t_status = _pick_translation(
+        t["title"], t.get("title_t") or "", source_lang, target_lang, job_status,
+    )
+    summary_show, s_is_t, _ = _pick_translation(
+        t.get("summary") or "", t.get("summary_t") or "", source_lang, target_lang, job_status,
+    )
+    desc_show, d_is_t, _ = _pick_translation(
+        t["description"], t.get("description_t") or "", source_lang, target_lang, job_status,
+    )
+    is_translated = t_is_t or s_is_t or d_is_t
+    return TenderDetail(
+        id=t["id"],
+        title=title_show,
+        summary=summary_show,
+        description=desc_show,
+        creator_uid=t["creator_uid"] or "",
+        creator_name=t.get("creator_name"),
+        creator_image=t.get("creator_image"),
+        creator_wallet=t.get("creator_wallet"),
+        status=t["status"],
+        created_at=t["created_at"],
+        closes_at=t.get("closes_at"),
+        tally=tally,
+        voters=[VoterEntry(**v) for v in voters],
+        comment_count=int(comment_count or 0),
+        source_lang=source_lang,
+        is_translated=is_translated,
+        translation_status=t_status,
+        original_title=t["title"] if is_translated else None,
+        original_summary=(t.get("summary") or "") if is_translated else None,
+        original_description=t["description"] if is_translated else None,
+    )
+
+
+@router.post("/tenders/{tender_id}/close")
+async def close_tender(tender_id: UUID, user: dict = Depends(current_user)):
+    ch = _ensure_ch()
+    t = await ch.query_one(
+        "SELECT creator_email, status, title, summary, description, created_at, "
+        "closes_at, creator_wallet, creator_uid "
+        "FROM gonka_vote.tenders FINAL "
+        "WHERE id = {id:UUID} AND deleted_at IS NULL",
+        {"id": str(tender_id)},
+    )
+    if not t:
+        raise HTTPException(404, "tender not found")
+    if t["creator_email"] != user["email"]:
+        raise HTTPException(403, "only the creator can close")
+
+    await ch.insert(
+        "tenders",
+        ["id", "title", "summary", "description", "creator_email", "creator_wallet",
+         "status", "created_at", "closes_at", "creator_uid"],
+        [[
+            tender_id,
+            t["title"],
+            t.get("summary") or "",
+            t["description"],
+            t["creator_email"],
+            t.get("creator_wallet"),
+            "closed",
+            t["created_at"],
+            t.get("closes_at"),
+            t.get("creator_uid") or user["uid"],
+        ]],
+    )
+    return {"ok": True}
+
+
+@router.delete("/tenders/{tender_id}")
+async def delete_tender(tender_id: UUID, admin: dict = Depends(current_admin)):
+    """Admin-only soft delete. Cascades to all comments on this tender."""
+    ch = _ensure_ch()
+    t = await ch.query_one(
+        "SELECT id, title, summary, description, creator_email, creator_wallet, "
+        "status, created_at, closes_at, creator_uid "
+        "FROM gonka_vote.tenders FINAL "
+        "WHERE id = {id:UUID} AND deleted_at IS NULL",
+        {"id": str(tender_id)},
+    )
+    if not t:
+        raise HTTPException(404, "tender not found")
+
+    now = datetime.now(timezone.utc)
+
+    # Soft-delete the tender via ReplacingMergeTree(updated_at) — we re-insert
+    # the full row with deleted_at populated.
+    await ch.insert(
+        "tenders",
+        ["id", "title", "summary", "description", "creator_email", "creator_wallet",
+         "status", "created_at", "closes_at", "creator_uid",
+         "deleted_at", "deleted_by_email"],
+        [[
+            tender_id,
+            t["title"],
+            t.get("summary") or "",
+            t["description"],
+            t["creator_email"],
+            t.get("creator_wallet"),
+            t["status"],
+            t["created_at"],
+            t.get("closes_at"),
+            t.get("creator_uid") or "",
+            now,
+            admin["email"],
+        ]],
+    )
+
+    # Cascade: soft-delete comments. comments is plain MergeTree (no upsert),
+    # so we issue an ALTER UPDATE mutation (async, finishes within seconds).
+    await ch.command(
+        "ALTER TABLE gonka_vote.comments "
+        "UPDATE deleted_at = now64(3), deleted_by_email = {by:String} "
+        "WHERE tender_id = {tid:UUID} AND deleted_at IS NULL",
+        {"by": admin["email"], "tid": str(tender_id)},
+    )
+
+    return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# Comments
+# ----------------------------------------------------------------------------
+
+@router.get("/tenders/{tender_id}/comments")
+async def list_comments(
+    tender_id: UUID,
+    request: Request,
+    lang: Optional[str] = None,
+) -> list[CommentOut]:
+    ch = _ensure_ch()
+    target_lang = (lang or "").strip().lower()
+    me_record = await current_user_optional(request)
+    me_uid = me_record["uid"] if me_record else ""
+
+    rows = await ch.query_rows(
+        """
+        SELECT
+            c.id                                    AS id,
+            c.parent_comment_id                     AS parent_comment_id,
+            COALESCE(NULLIF(c.author_uid, ''), u.uid, '') AS author_uid,
+            COALESCE(u.name, c.author_name)         AS author_name,
+            u.image                                 AS author_image,
+            c.body                                  AS body,
+            c.source_lang                           AS source_lang,
+            ct.body                                 AS body_t,
+            c.created_at                            AS created_at,
+            COALESCE(tj.status, '')                 AS job_status,
+            countIf(r.reaction_type = 'like')       AS likes,
+            countIf(r.reaction_type = 'dislike')    AS dislikes,
+            anyIf(r.reaction_type,
+                  r.reactor_uid = {me_uid:String} AND r.reaction_type != '') AS my_reaction
+        FROM gonka_vote.comments AS c
+        LEFT JOIN gonka_vote.users             AS u FINAL ON u.email = c.author_email
+        LEFT JOIN gonka_vote.comment_reactions AS r FINAL ON r.comment_id = c.id
+        LEFT JOIN gonka_vote.translation_jobs  AS tj FINAL
+                  ON tj.kind = 'comment' AND tj.entity_id = c.id AND tj.target_lang = {lang:String}
+        LEFT JOIN gonka_vote.comment_translations AS ct FINAL
+                  ON ct.comment_id = c.id AND ct.target_lang = {lang:String}
+        WHERE c.tender_id = {id:UUID} AND c.deleted_at IS NULL
+        GROUP BY c.id, c.parent_comment_id, c.author_uid, c.author_name,
+                 u.uid, u.name, u.image, c.body, c.source_lang, ct.body,
+                 c.created_at, tj.status
+        -- Top score first; on tie, oldest first (stable, rewards early posts).
+        ORDER BY (toInt64(countIf(r.reaction_type = 'like'))
+                  - toInt64(countIf(r.reaction_type = 'dislike'))) DESC,
+                 c.created_at ASC
+        """,
+        {"id": str(tender_id), "me_uid": me_uid, "lang": target_lang},
+    )
+    out: list[CommentOut] = []
+    for r in rows:
+        source_lang = r.get("source_lang") or ""
+        body_show, is_t, status = _pick_translation(
+            r["body"], r.get("body_t") or "", source_lang, target_lang,
+            r.get("job_status") or "",
+        )
+        out.append(CommentOut(
+            id=r["id"],
+            parent_comment_id=r.get("parent_comment_id"),
+            author_uid=r["author_uid"] or "",
+            author_name=r.get("author_name"),
+            author_image=r.get("author_image"),
+            body=body_show,
+            created_at=r["created_at"],
+            likes=int(r["likes"] or 0),
+            dislikes=int(r["dislikes"] or 0),
+            my_reaction=(r["my_reaction"] or None) or None,
+            source_lang=source_lang,
+            is_translated=is_t,
+            original_body=r["body"] if is_t else None,
+            translation_status=status,
+        ))
+    return out
+
+
+@router.post("/tenders/{tender_id}/comments", status_code=201)
+async def add_comment(
+    tender_id: UUID,
+    payload: CommentCreate,
+    user: dict = Depends(current_user),
+) -> CommentOut:
+    ch = _ensure_ch()
+    exists = await ch.query_scalar(
+        "SELECT 1 FROM gonka_vote.tenders FINAL WHERE id = {id:UUID} AND deleted_at IS NULL",
+        {"id": str(tender_id)},
+    )
+    if not exists:
+        raise HTTPException(404, "tender not found")
+
+    if payload.parent_comment_id is not None:
+        parent_tender = await ch.query_scalar(
+            "SELECT tender_id FROM gonka_vote.comments "
+            "WHERE id = {pid:UUID} AND deleted_at IS NULL LIMIT 1",
+            {"pid": str(payload.parent_comment_id)},
+        )
+        if parent_tender is None:
+            raise HTTPException(404, "parent comment not found")
+        if str(parent_tender) != str(tender_id):
+            raise HTTPException(400, "parent comment belongs to a different tender")
+
+    cid = uuid4()
+    now = datetime.now(timezone.utc)
+    # source_lang stays empty until the worker resolves it via AI detection
+    # (see worker._process_detect). Keeps add_comment fast.
+    await ch.insert(
+        "comments",
+        ["id", "tender_id", "author_email", "author_name", "body", "created_at",
+         "parent_comment_id", "author_uid", "source_lang"],
+        [[cid, tender_id, user["email"], user.get("name"), payload.body, now,
+          payload.parent_comment_id, user["uid"], ""]],
+    )
+    try:
+        await enqueue_detect(ch, "comment", cid)
+    except Exception as e:
+        logger.warning("enqueue_detect(comment) failed for %s: %s", cid, e)
+    await enqueue_comment_notifications(ch, cid)
+    return CommentOut(
+        id=cid,
+        parent_comment_id=payload.parent_comment_id,
+        author_uid=user["uid"],
+        author_name=user.get("name"),
+        author_image=user.get("image"),
+        body=payload.body,
+        created_at=now,
+        likes=0,
+        dislikes=0,
+        my_reaction=None,
+        source_lang="",
+        translation_status="pending" if len(supported_languages()) > 1 else "ready",
+    )
+
+
+@router.delete("/comments/{comment_id}")
+async def delete_comment(comment_id: UUID, admin: dict = Depends(current_admin)):
+    """Admin-only soft delete for a single comment (does not touch replies)."""
+    ch = _ensure_ch()
+    exists = await ch.query_scalar(
+        "SELECT 1 FROM gonka_vote.comments "
+        "WHERE id = {cid:UUID} AND deleted_at IS NULL LIMIT 1",
+        {"cid": str(comment_id)},
+    )
+    if not exists:
+        raise HTTPException(404, "comment not found")
+    await ch.command(
+        "ALTER TABLE gonka_vote.comments "
+        "UPDATE deleted_at = now64(3), deleted_by_email = {by:String} "
+        "WHERE id = {cid:UUID}",
+        {"by": admin["email"], "cid": str(comment_id)},
+    )
+    return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# Reactions
+# ----------------------------------------------------------------------------
+
+@router.post("/comments/{comment_id}/reactions")
+async def upsert_reaction(
+    comment_id: UUID,
+    payload: ReactionUpsert,
+    user: dict = Depends(current_user),
+) -> dict:
+    """Set, change, or remove the current user's reaction on a comment.
+
+    payload.reaction = 'like' | 'dislike' to set/change; '' to remove.
+    Idempotent.
+    """
+    ch = _ensure_ch()
+    exists = await ch.query_scalar(
+        "SELECT 1 FROM gonka_vote.comments "
+        "WHERE id = {cid:UUID} AND deleted_at IS NULL LIMIT 1",
+        {"cid": str(comment_id)},
+    )
+    if not exists:
+        raise HTTPException(404, "comment not found")
+
+    await ch.insert(
+        "comment_reactions",
+        ["comment_id", "reactor_uid", "reaction_type", "updated_at"],
+        [[comment_id, user["uid"], payload.reaction, datetime.now(timezone.utc)]],
+    )
+    return {"ok": True, "reaction": payload.reaction or None}
+
+
+# ----------------------------------------------------------------------------
+# Public user profile (by uid). Email is intentionally not returned.
+# ----------------------------------------------------------------------------
+
+@router.get("/users/{uid}")
+async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProfile:
+    ch = _ensure_ch()
+    target_lang = (lang or "").strip().lower()
+    u = await ch.query_one(
+        """
+        SELECT uid, email, name, image, wallet_address
+        FROM gonka_vote.users FINAL
+        WHERE uid = {uid:String}
+        LIMIT 1
+        """,
+        {"uid": uid},
+    )
+    if not u:
+        raise HTTPException(404, "user not found")
+
+    # Tenders: match by either creator_uid (new rows) or creator_email (old rows
+    # that pre-date the uid backfill on the per-row column).
+    rows = await ch.query_rows(
+        """
+        WITH tender_tallies AS (
+            SELECT
+                tender_id,
+                count()                                          AS voter_count,
+                sum(amount_ngonka)                               AS sum_bid,
+                sum(weight_ngonka)                               AS community_w,
+                sum(host_weight)                                 AS hosts_w,
+                if(sum(weight_ngonka) = 0, toUInt256(0),
+                   intDiv(sum(toUInt256(amount_ngonka) * toUInt256(weight_ngonka)),
+                          toUInt256(sum(weight_ngonka))))        AS weighted_avg,
+                max(refreshed_at)                                AS refreshed_at
+            FROM gonka_vote.vote_snapshots FINAL
+            GROUP BY tender_id
+        )
+        SELECT
+            t.id            AS id,
+            t.title         AS title,
+            t.summary       AS summary,
+            t.source_lang   AS source_lang,
+            ttx.title       AS title_t,
+            ttx.summary     AS summary_t,
+            {uid:String}    AS creator_uid,
+            {name:String}   AS creator_name,
+            {image:String}  AS creator_image,
+            t.status        AS status,
+            t.created_at    AS created_at,
+            t.closes_at     AS closes_at,
+            COALESCE(tt.voter_count, 0)              AS voter_count,
+            toString(COALESCE(tt.sum_bid, 0))        AS sum_bid,
+            toString(COALESCE(tt.community_w, 0))    AS community_w,
+            toString(COALESCE(tt.hosts_w, 0))        AS hosts_w,
+            toString(COALESCE(tt.weighted_avg, 0))   AS weighted_avg,
+            tt.refreshed_at                          AS refreshed_at
+        FROM gonka_vote.tenders AS t FINAL
+        LEFT JOIN tender_tallies AS tt ON tt.tender_id = toString(t.id)
+        LEFT JOIN gonka_vote.tender_translations AS ttx FINAL
+                  ON ttx.tender_id = t.id AND ttx.target_lang = {lang:String}
+        WHERE t.deleted_at IS NULL
+          AND (t.creator_email = {email:String} OR t.creator_uid = {uid:String})
+        ORDER BY t.created_at DESC
+        """,
+        {
+            "uid": uid,
+            "email": u["email"],
+            "name": u.get("name") or "",
+            "image": u.get("image") or "",
+            "lang": target_lang,
+        },
+    )
+    return UserPublicProfile(
+        uid=u["uid"],
+        name=u.get("name"),
+        image=u.get("image"),
+        wallet_address=u.get("wallet_address"),
+        tenders=[_row_to_summary(r, target_lang) for r in rows],
+    )
+
+
+# ----------------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------------
+
+def _pick_translation(
+    original: str,
+    translation: str,
+    source_lang: str,
+    target_lang: str,
+    job_status: str,
+) -> tuple[str, bool, str]:
+    """Decide which text to serve and what status to report.
+
+    Returns (text_to_show, is_translated, translation_status).
+    - If no target_lang requested, or it equals source, or no source known →
+      show original, status='ready', is_translated=False.
+    - If translation present in `*_t.{target_lang}` → use it, is_translated=True.
+    - Else look at the job: pending/running → 'pending', failed → 'failed',
+      missing → 'pending' (worker hasn't picked it up yet).
+    """
+    if not target_lang or not source_lang or target_lang == source_lang:
+        return original, False, "ready"
+    if translation:
+        return translation, True, "ready"
+    if job_status in ("pending", "running", ""):
+        return original, False, "pending"
+    if job_status == "failed":
+        return original, False, "failed"
+    return original, False, "ready"
+
+
+def _row_to_summary(r: dict, target_lang: str = "") -> TenderSummary:
+    creator_image = r.get("creator_image")
+    source_lang = (r.get("source_lang") or "")
+    title_show, title_is_t, t_status = _pick_translation(
+        r["title"], r.get("title_t") or "", source_lang, target_lang,
+        r.get("job_status") or "",
+    )
+    summary_show, summary_is_t, _ = _pick_translation(
+        r.get("summary") or "", r.get("summary_t") or "", source_lang, target_lang,
+        r.get("job_status") or "",
+    )
+    is_translated = title_is_t or summary_is_t
+    return TenderSummary(
+        id=r["id"],
+        title=title_show,
+        summary=summary_show,
+        creator_uid=(r.get("creator_uid") or ""),
+        creator_name=(r.get("creator_name") or None),
+        creator_image=(creator_image if creator_image else None),
+        status=r["status"],
+        created_at=r["created_at"],
+        closes_at=r.get("closes_at"),
+        comment_count=int(r.get("comment_count") or 0),
+        source_lang=source_lang,
+        is_translated=is_translated,
+        original_title=r["title"] if is_translated else None,
+        original_summary=(r.get("summary") or "") if is_translated else None,
+        translation_status=t_status,
+        tally=TenderTally(
+            voter_count=int(r["voter_count"] or 0),
+            sum_bid_ngonka=str(r["sum_bid"] or "0"),
+            community_weight_ngonka=str(r["community_w"] or "0"),
+            hosts_weight_ngonka=str(r["hosts_w"] or "0"),
+            weighted_avg_bid_ngonka=str(r["weighted_avg"] or "0"),
+            refreshed_at=r.get("refreshed_at"),
+        ),
+    )
+
+
+def _row_to_tally(r: dict) -> TenderTally:
+    return TenderTally(
+        voter_count=int(r["voter_count"] or 0),
+        sum_bid_ngonka=str(r["sum_bid"] or "0"),
+        community_weight_ngonka=str(r["community_w"] or "0"),
+        hosts_weight_ngonka=str(r["hosts_w"] or "0"),
+        weighted_avg_bid_ngonka=str(r["weighted_avg"] or "0"),
+        refreshed_at=r.get("refreshed_at"),
+    )

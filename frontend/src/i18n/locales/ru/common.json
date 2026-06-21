@@ -1,0 +1,411 @@
+{
+  "header": {
+    "tenders": "Тендеры",
+    "governance": "Голосование",
+    "newTender": "+ Новый тендер",
+    "signIn": "Войти"
+  },
+  "lang": {
+    "english": "English",
+    "russian": "Русский"
+  },
+  "footer": {
+    "copyright": "© 2026 Gonka Vote",
+    "tagline": "Платформа для community-голосований · веса по балансу GNK · не связана с он-чейн governance.",
+    "site": "gonka.ai",
+    "wallet": "Кошелёк",
+    "privacy": "Приватность",
+    "terms": "Условия"
+  },
+  "home": {
+    "hero": {
+      "badge": "Голосование сообщества · вес по балансу GNK",
+      "titleLine1": "Что Gonka должна",
+      "titleLine2": "построить следующим?",
+      "subtitle": "Предложи тендер, обсуди его и укажи справедливую сумму выплаты исполнителю из <strong>пула сообщества</strong>. Гранты взвешиваются по текущему балансу GNK голосующего.",
+      "propose": "+ Предложить тендер"
+    },
+    "list": {
+      "title": "Тендеры",
+      "search": "Поиск тендеров…",
+      "countOf": "({{shown}} из {{total}})",
+      "count": "({{n}})"
+    },
+    "bucket": {
+      "all": "Все",
+      "active": "Активные",
+      "expired": "Истекшие"
+    },
+    "section": {
+      "active": "Активные · {{n}}",
+      "expired": "Истекшие · {{n}}"
+    },
+    "sort": {
+      "newest": "Сначала новые",
+      "voters_desc": "Голосов — больше",
+      "voters_asc": "Голосов — меньше",
+      "community_desc": "Вес комьюнити ↓",
+      "community_asc": "Вес комьюнити ↑",
+      "hosts_desc": "Вес хостов ↓",
+      "hosts_asc": "Вес хостов ↑",
+      "bid_desc": "Средний грант ↓",
+      "bid_asc": "Средний грант ↑"
+    },
+    "empty": {
+      "noneSignedIn": "Тендеров пока нет.",
+      "beTheFirst": "Создай первый →",
+      "noneSignedOut": "Войди, чтобы создать.",
+      "noMatch": "Под запрос ничего не нашлось"
+    }
+  },
+  "tender": {
+    "back": "← Все тендеры",
+    "by": "автор",
+    "unknown": "неизвестен",
+    "status": {
+      "open": "открыт",
+      "closed": "закрыт"
+    },
+    "delete": "Удалить",
+    "deleting": "Удаление…",
+    "deleteConfirm": "Удалить «{{title}}»? Комментарии тоже исчезнут. Это нельзя отменить.",
+    "tally": {
+      "voters": "Голосов",
+      "community": "Комьюнити",
+      "communityWeight": "Вес комьюнити",
+      "hosts": "Хосты",
+      "hostsWeight": "Вес хостов",
+      "totalBids": "Сумма ставок",
+      "avgBid": "Средняя ставка",
+      "bid": "Ставка",
+      "avgGrant": "Средний грант",
+      "grant": "Грант",
+      "refreshed": "Обновлено {{when}} · пересчёт каждую минуту"
+    },
+    "voters": {
+      "title": "Проголосовавшие",
+      "address": "Адрес",
+      "bid": "Ставка",
+      "balance": "Баланс",
+      "grant": "Грант",
+      "weight": "Баланс",
+      "hostsCol": "Хосты",
+      "voted": "Когда",
+      "tx": "Tx",
+      "openTx": "Открыть транзакцию {{hash}} в трекере",
+      "showMore": "Ещё {{n}}",
+      "showAll": "Показать все",
+      "showLess": "Свернуть",
+      "showingOf": "Показано {{shown}} из {{total}}",
+      "openTracker": "Открыть транзакцию в трекере"
+    },
+    "sidebar": {
+      "tenderId": "ID тендера",
+      "contract": "Контракт"
+    },
+    "notFound": "Тендер не найден.",
+    "back2": "← Назад",
+    "loading": "Загрузка…"
+  },
+  "cast": {
+    "title": "Проголосовать",
+    "description": "Сколько GNK (целым числом) должен получить исполнитель из пула сообщества за реализацию этого тендера? Твой голос задаёт справедливую цену — <strong>твой собственный баланс не трогается, ничего не блокируется и не списывается.</strong> Голосовать можно только один раз и без возможности изменить голос; средний грант считается с весом по балансу GNK каждого голосующего.",
+    "yourBid": "Твой грант",
+    "invalid": "Введи положительное целое число GNK.",
+    "voteWc": "Голосовать через WalletConnect",
+    "cliTitle": "Или через CLI",
+    "copy": "Скопировать команду",
+    "copied": "✓ Скопировано",
+    "notConfigured": "Контракт голосования ещё не настроен."
+  },
+  "gov": {
+    "vote": {
+      "title": "Проголосовать",
+      "description": "Проголосуй за это предложение через свой кошелёк. Голос записывается on-chain.",
+      "yes": "За",
+      "no": "Против",
+      "abstain": "Воздержаться",
+      "noWithVeto": "Против с вето",
+      "submit": "Голосовать через WalletConnect",
+      "submitDisabled": "Сначала выбери вариант",
+      "cliTitle": "Или через CLI",
+      "copy": "Скопировать команду",
+      "copied": "✓ Скопировано",
+      "notVoting": "Период голосования по этому предложению закрыт."
+    }
+  },
+  "wc": {
+    "title": "Голосовать через WalletConnect",
+    "bid": "Грант:",
+    "govVote": "Голос «{{option}}» по предложению #{{id}}",
+    "preparing": "Готовлю пэйринг…",
+    "copyLink": "Скопировать ссылку",
+    "copied": "✓ Скопировано",
+    "openInWallet": "Открыть в Gonka Wallet",
+    "noWallet": "Нет кошелька?",
+    "confirm": "Подтверди транзакцию в кошельке…",
+    "broadcasting": "Отправляю…",
+    "submitted": "Голос отправлен",
+    "done": "Готово",
+    "couldNotVote": "Не удалось проголосовать",
+    "close": "Закрыть"
+  },
+  "countdown": {
+    "noDeadline": "Без дедлайна",
+    "expired": "Истёк",
+    "left": "осталось {{value}}",
+    "closesIn": "Закроется через",
+    "status": "Статус",
+    "closed": "Закрыт",
+    "unit": {
+      "d": "д",
+      "h": "ч",
+      "m": "м",
+      "s": "с"
+    }
+  },
+  "auth": {
+    "signIn": "Войти",
+    "modal": {
+      "title": "Войти в Gonka Vote",
+      "subtitle": "Выбери способ входа.",
+      "google": "Продолжить с Google",
+      "telegram": "Продолжить с Telegram",
+      "or": "или",
+      "signingIn": "Вход…",
+      "tgFailed": "Не удалось войти через Telegram",
+      "tgCancelled": "Вход через Telegram отменён.",
+      "tgNotReady": "Telegram ещё не готов — попробуй ещё раз через секунду.",
+      "tgScriptError": "Не удалось загрузить скрипт Telegram",
+      "terms": "Авторизуясь, ты соглашаешься с <terms>Условиями</terms> и <privacy>Политикой приватности</privacy>."
+    },
+    "close": "Закрыть",
+    "signOut": "Выйти"
+  },
+  "governance": {
+    "list": {
+      "title": "Предложения",
+      "subtitle": "On-chain голосования: апгрейды протокола, изменения параметров, выплаты из пула сообщества.",
+      "search": "Поиск по названию или адресу…"
+    },
+    "status": {
+      "voting": "Голосование",
+      "deposit": "Депозит",
+      "passed": "Принято",
+      "rejected": "Отклонено",
+      "failed": "Провалено",
+      "all": "Все"
+    },
+    "cols": {
+      "proposal": "Предложение",
+      "epoch": "Эпоха",
+      "tally": "Голоса",
+      "voters": "Проголосовали",
+      "turnout": "Явка"
+    },
+    "tally": {
+      "yes": "за",
+      "no": "против",
+      "veto": "вето",
+      "abstain": "воздержались"
+    },
+    "expedited": "Срочное",
+    "tabs": {
+      "discussion": "Обсуждение",
+      "details": "Детали",
+      "votes": "Голоса",
+      "deposits": "Депозиты",
+      "json": "JSON"
+    },
+    "votesCols": {
+      "voter": "Адрес",
+      "option": "Голос",
+      "power": "Вес",
+      "voted": "Когда",
+      "tx": "Tx"
+    },
+    "depositsCols": {
+      "depositor": "Адрес",
+      "amount": "Сумма",
+      "deposited": "Когда",
+      "tx": "Tx"
+    },
+    "detail": {
+      "epoch": "Эпоха",
+      "proposer": "Автор",
+      "votingPeriod": "Период голосования",
+      "totalDeposit": "Общий депозит",
+      "voters": "Проголосовали",
+      "turnoutQuorum": "Явка / Кворум",
+      "weight": "Вес",
+      "tally": "Голоса",
+      "failedReason": "Причина провала",
+      "metadataLink": "Metadata:",
+      "noMetadata": "У этого предложения нет внешних метаданных."
+    },
+    "empty": {
+      "noProposals": "Под этот фильтр ничего не нашлось.",
+      "noVotes": "Голосов пока нет.",
+      "noDeposits": "Депозитов для этого предложения нет."
+    },
+    "pagination": {
+      "prev": "Новее",
+      "next": "Старее",
+      "page": "Страница {{page}} из {{total}}"
+    },
+    "back": "← Все предложения",
+    "notFound": "Предложение не найдено.",
+    "msg": {
+      "send": "Перевод",
+      "multiSend": "Мульти-перевод",
+      "grantPermission": "Выдать права",
+      "revokePermission": "Отозвать права",
+      "authzExec": "Authz Exec",
+      "vote": "Голосование",
+      "proposalDeposit": "Депозит предложения",
+      "submitProposal": "Подать предложение",
+      "execLegacyContent": "Exec Legacy Content",
+      "textProposal": "Текстовое предложение",
+      "unjailValidator": "Снять блокировку валидатора",
+      "delegate": "Делегировать",
+      "undelegate": "Снять делегирование",
+      "redelegate": "Переделегировать",
+      "createValidator": "Создать валидатора",
+      "editValidator": "Изменить валидатора",
+      "withdrawReward": "Вывод награды",
+      "withdrawCommission": "Вывод комиссии",
+      "communityPoolSpend": "Выплата из пула сообщества",
+      "fundCommunityPool": "Пополнить пул сообщества",
+      "softwareUpgrade": "Апгрейд протокола",
+      "cancelUpgrade": "Отменить апгрейд",
+      "updateParamsBank": "Обновление параметров (Bank)",
+      "updateParamsGov": "Обновление параметров (Governance)",
+      "updateParamsSlashing": "Обновление параметров (Slashing)",
+      "updateParamsStaking": "Обновление параметров (Staking)",
+      "updateParamsDistribution": "Обновление параметров (Distribution)",
+      "updateParamsMint": "Обновление параметров (Mint)",
+      "updateParamsWasm": "Обновление параметров (Wasm)",
+      "updateParamsCollateral": "Обновление параметров (Collateral)",
+      "updateParamsRestrictions": "Обновление параметров (Restrictions)",
+      "updateParamsStreamvesting": "Обновление параметров (Stream Vesting)",
+      "updateParamsBookkeeper": "Обновление параметров (Bookkeeper)",
+      "updateParamsInference": "Обновление параметров (Inference)",
+      "contractExecute": "Вызов контракта",
+      "contractInstantiate": "Развернуть контракт",
+      "contractInstantiate2": "Развернуть контракт v2",
+      "contractStoreCode": "Загрузить код контракта",
+      "contractMigrate": "Мигрировать контракт",
+      "contractUpdateAdmin": "Изменить админа контракта",
+      "contractClearAdmin": "Сбросить админа контракта",
+      "ibcUpdateClient": "IBC: обновление клиента",
+      "ibcRecoverClient": "IBC: восстановление клиента",
+      "ibcUpgradeClient": "IBC: апгрейд клиента",
+      "collateralDeposit": "Депозит обеспечения",
+      "collateralWithdraw": "Вывод обеспечения",
+      "batchTransferWithVesting": "Пакетный перевод с вестингом",
+      "registerModel": "Регистрация модели",
+      "registerIbcTokenMetadata": "Регистрация IBC-токена",
+      "approveIbcTokenForTrading": "Разрешить IBC-токен к торгам",
+      "addParticipantsToAllowList": "Добавить участников в allow-list",
+      "removeParticipantsFromAllowList": "Удалить участников из allow-list",
+      "inferenceStart": "Запуск inference",
+      "inferenceFinish": "Завершение inference",
+      "inferenceValidation": "Валидация inference",
+      "inferenceInvalidate": "Аннулировать inference",
+      "inferenceRevalidate": "Повторная валидация inference",
+      "claimRewards": "Получить награды",
+      "pocBatchV1": "PoC Batch (v1)",
+      "pocValidationV1": "PoC Validation (v1)",
+      "pocCommit": "PoC Commit",
+      "pocValidation": "PoC Validation",
+      "submitSeed": "Отправить seed",
+      "bridgeExchange": "Bridge обмен",
+      "newParticipant": "Новый участник",
+      "hardwareUpdate": "Обновление оборудования",
+      "trainingKvRecord": "Training KV запись",
+      "joinTraining": "Подключиться к обучению",
+      "trainingStatus": "Статус обучения",
+      "trainingHeartbeat": "Training heartbeat",
+      "trainingBarrier": "Training barrier",
+      "claimTrainingTask": "Забрать задачу обучения",
+      "assignTrainingTask": "Назначить задачу обучения",
+      "dkgDealerPart": "DKG Dealer Part",
+      "dkgVerificationVector": "DKG Verification Vector",
+      "thresholdSignatureRequest": "Запрос threshold-подписи",
+      "partialSignature": "Частичная подпись",
+      "groupKeyValidation": "Валидация group key"
+    }
+  },
+  "translation": {
+    "showOriginal": "🌐 Показать оригинал",
+    "showTranslation": "← Показать перевод",
+    "pending": "🌐 Переводится…",
+    "failed": "Перевод недоступен",
+    "translatedFromShort": "Переведено с {{lang}}"
+  },
+  "comments": {
+    "title": "Обсуждение",
+    "empty": "Комментариев пока нет — будь первым.",
+    "placeholder": "Поделись мыслями…",
+    "post": "Отправить",
+    "posting": "Отправляю…",
+    "signInPrompt": "Войди, чтобы комментировать",
+    "reply": "Ответить",
+    "replyTo": "Ответ для {{name}}…",
+    "replyPost": "Отправить ответ",
+    "cancel": "Отмена",
+    "delete": "Удалить",
+    "deleteConfirm": "Удалить этот комментарий?",
+    "unknown": "неизвестен",
+    "like": "Нравится",
+    "dislike": "Не нравится",
+    "signInToReact": "Войди, чтобы реагировать"
+  },
+  "newTender": {
+    "back": "Отмена",
+    "signInTitle": "Войди, чтобы предложить тендер",
+    "title": "Предложить тендер",
+    "intro": "Тендеры — это индикативные опросы. Сообщество голосует своими GNK, чтобы обозначить приоритет. В профиле можно указать кошелёк для получения награды, если тендер реализуют.",
+    "titleField": "Название",
+    "titlePlaceholder": "например: Добавить WalletConnect в Gonka Wallet",
+    "summary": "Краткое описание",
+    "summaryPlaceholder": "Один абзац-питч — будет показан на карточках и в превью соцсетей.",
+    "summaryHint": "Минимум 10 символов. Оптимально до 160 — для красивых превью соцсетей.",
+    "description": "Описание (поддерживается Markdown)",
+    "descriptionPlaceholder": "## Проблема\n\n…\n\n## Решение\n\n…\n\n## Почему сейчас\n\n…",
+    "edit": "Редактировать",
+    "preview": "Превью",
+    "previewEmpty": "Пока нечего показывать.",
+    "deadline": "Дедлайн",
+    "deadlineHint": "(минимум {{days}} дней)",
+    "deadlineMinError": "Дедлайн должен быть хотя бы через {{days}} дней.",
+    "deadlinePreview": "Закроется {{when}}",
+    "preset": {
+      "1w": "1 неделя",
+      "2w": "2 недели",
+      "1m": "1 месяц",
+      "3m": "3 месяца"
+    },
+    "publish": "Опубликовать",
+    "publishing": "Создаём…"
+  },
+  "me": {
+    "viewPublic": "Открыть публичный профиль →",
+    "rewardWalletLabel": "Кошелёк для награды (опционально)",
+    "rewardWalletHint": "Если предложенный тобой тендер реализуют, сообщество сможет отправить награду в GNK на этот адрес. Для голосований кошелёк не используется.",
+    "save": "Сохранить",
+    "saving": "Сохраняю…",
+    "saved": "✓ Сохранено",
+    "signOut": "Выйти"
+  },
+  "profile": {
+    "back": "← Все тендеры",
+    "wallet": "Кошелёк",
+    "tendersTitle": "Тендеры этого пользователя",
+    "tendersCount": "({{n}})",
+    "noTenders": "Тендеров пока нет.",
+    "notFound": "Пользователь не найден.",
+    "home": "← Главная",
+    "loading": "Загрузка…"
+  }
+}

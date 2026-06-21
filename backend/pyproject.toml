@@ -1,0 +1,32 @@
+[project]
+name = "vote-backend"
+version = "0.1.0"
+description = "Gonka Vote — FastAPI backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "clickhouse-connect>=0.8.0",
+    # Required by clickhouse-connect's AsyncClient at runtime (not declared
+    # as a hard dep upstream).
+    "aiohttp>=3.9.0",
+    "httpx>=0.27.0",
+    "authlib>=1.3.0",
+    "itsdangerous>=2.2.0",        # signed cookie sessions
+    "pyjwt[crypto]>=2.9.0",
+    "bech32>=1.2.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "python-multipart>=0.0.9",
+    "langdetect>=1.0.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

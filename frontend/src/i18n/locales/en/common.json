@@ -1,0 +1,411 @@
+{
+  "header": {
+    "tenders": "Tenders",
+    "governance": "Governance",
+    "newTender": "+ New tender",
+    "signIn": "Sign in"
+  },
+  "lang": {
+    "english": "English",
+    "russian": "Русский"
+  },
+  "footer": {
+    "copyright": "© 2026 Gonka Vote",
+    "tagline": "Community-driven tender portal · indicative votes weighted by GNK balance · not affiliated with on-chain governance.",
+    "site": "gonka.ai",
+    "wallet": "Wallet",
+    "privacy": "Privacy",
+    "terms": "Terms"
+  },
+  "home": {
+    "hero": {
+      "badge": "Community-driven · GNK-weighted",
+      "titleLine1": "What should Gonka",
+      "titleLine2": "build next?",
+      "subtitle": "Propose a tender, discuss it, and signal what would be a fair payout from the <strong>community pool</strong> for implementing it. Grants are weighted by each voter's current GNK balance.",
+      "propose": "+ Propose a tender"
+    },
+    "list": {
+      "title": "Tenders",
+      "search": "Search tenders…",
+      "countOf": "({{shown}} of {{total}})",
+      "count": "({{n}})"
+    },
+    "bucket": {
+      "all": "All",
+      "active": "Active",
+      "expired": "Expired"
+    },
+    "section": {
+      "active": "Active · {{n}}",
+      "expired": "Expired · {{n}}"
+    },
+    "sort": {
+      "newest": "Newest first",
+      "voters_desc": "Voters — most first",
+      "voters_asc": "Voters — least first",
+      "community_desc": "Community weight ↓",
+      "community_asc": "Community weight ↑",
+      "hosts_desc": "Hosts weight ↓",
+      "hosts_asc": "Hosts weight ↑",
+      "bid_desc": "Avg grant ↓",
+      "bid_asc": "Avg grant ↑"
+    },
+    "empty": {
+      "noneSignedIn": "No tenders yet.",
+      "beTheFirst": "Be the first to propose one →",
+      "noneSignedOut": "Sign in to create one.",
+      "noMatch": "No tenders match"
+    }
+  },
+  "tender": {
+    "back": "← All tenders",
+    "by": "by",
+    "unknown": "unknown",
+    "status": {
+      "open": "open",
+      "closed": "closed"
+    },
+    "delete": "Delete",
+    "deleting": "Deleting…",
+    "deleteConfirm": "Delete \"{{title}}\"? This will also remove its comments. This cannot be undone.",
+    "tally": {
+      "voters": "Voters",
+      "community": "Community",
+      "communityWeight": "Community weight",
+      "hosts": "Hosts",
+      "hostsWeight": "Hosts weight",
+      "totalBids": "Total bids",
+      "avgBid": "Avg bid",
+      "bid": "Bid",
+      "avgGrant": "Avg grant",
+      "grant": "Grant",
+      "refreshed": "Refreshed {{when}} · re-tallied every minute"
+    },
+    "voters": {
+      "title": "Voters",
+      "address": "Address",
+      "bid": "Bid",
+      "balance": "Balance",
+      "grant": "Grant",
+      "weight": "Balance",
+      "hostsCol": "Hosts",
+      "voted": "Voted",
+      "tx": "Tx",
+      "openTx": "View tx {{hash}} on tracker",
+      "showMore": "Show {{n}} more",
+      "showAll": "Show all",
+      "showLess": "Show less",
+      "showingOf": "Showing {{shown}} of {{total}}",
+      "openTracker": "Open transaction in tracker"
+    },
+    "sidebar": {
+      "tenderId": "Tender ID",
+      "contract": "Contract"
+    },
+    "notFound": "Tender not found.",
+    "back2": "← Back",
+    "loading": "Loading…"
+  },
+  "cast": {
+    "title": "Cast your vote",
+    "description": "How much GNK (whole numbers) should the implementer be paid from the community pool when this tender is delivered? Your vote signals a fair price — <strong>your own balance is never touched, nothing is locked or charged.</strong> You vote once per tender and can't change it later; the average across all grants is weighted by each voter's GNK balance.",
+    "yourBid": "Your grant",
+    "invalid": "Enter a positive whole number of GNK.",
+    "voteWc": "Vote with WalletConnect",
+    "cliTitle": "Or use the CLI",
+    "copy": "Copy command",
+    "copied": "✓ Copied",
+    "notConfigured": "Vote contract is not yet configured."
+  },
+  "gov": {
+    "vote": {
+      "title": "Cast your vote",
+      "description": "Vote on this proposal with your wallet. Your vote is recorded on-chain.",
+      "yes": "Yes",
+      "no": "No",
+      "abstain": "Abstain",
+      "noWithVeto": "No With Veto",
+      "submit": "Vote with WalletConnect",
+      "submitDisabled": "Pick an option first",
+      "cliTitle": "Or use the CLI",
+      "copy": "Copy command",
+      "copied": "✓ Copied",
+      "notVoting": "Voting period has ended for this proposal."
+    }
+  },
+  "wc": {
+    "title": "Vote with WalletConnect",
+    "bid": "Grant:",
+    "govVote": "Voting {{option}} on proposal #{{id}}",
+    "preparing": "Preparing pairing…",
+    "copyLink": "Copy link",
+    "copied": "✓ Copied",
+    "openInWallet": "Open in Gonka Wallet",
+    "noWallet": "Don't have a wallet?",
+    "confirm": "Confirm the transaction in your wallet…",
+    "broadcasting": "Broadcasting…",
+    "submitted": "Vote submitted",
+    "done": "Done",
+    "couldNotVote": "Could not vote",
+    "close": "Close"
+  },
+  "countdown": {
+    "noDeadline": "No deadline",
+    "expired": "Expired",
+    "left": "{{value}} left",
+    "closesIn": "Closes in",
+    "status": "Status",
+    "closed": "Closed",
+    "unit": {
+      "d": "d",
+      "h": "h",
+      "m": "m",
+      "s": "s"
+    }
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "modal": {
+      "title": "Sign in to Gonka Vote",
+      "subtitle": "Pick a provider to continue.",
+      "google": "Continue with Google",
+      "telegram": "Continue with Telegram",
+      "or": "or",
+      "signingIn": "Signing in…",
+      "tgFailed": "Telegram login failed",
+      "tgCancelled": "Telegram sign-in was cancelled.",
+      "tgNotReady": "Telegram is not ready yet — try again in a moment.",
+      "tgScriptError": "Telegram script failed to load",
+      "terms": "By signing in you agree to our <terms>Terms</terms> and <privacy>Privacy Policy</privacy>."
+    },
+    "close": "Close",
+    "signOut": "Sign out"
+  },
+  "governance": {
+    "list": {
+      "title": "Proposals",
+      "subtitle": "On-chain governance: software upgrades, parameter changes, community spends.",
+      "search": "Search title or voter address…"
+    },
+    "status": {
+      "voting": "Voting",
+      "deposit": "Deposit",
+      "passed": "Passed",
+      "rejected": "Rejected",
+      "failed": "Failed",
+      "all": "All"
+    },
+    "cols": {
+      "proposal": "Proposal",
+      "epoch": "Epoch",
+      "tally": "Tally",
+      "voters": "Voters",
+      "turnout": "Turnout"
+    },
+    "tally": {
+      "yes": "yes",
+      "no": "no",
+      "veto": "veto",
+      "abstain": "abstain"
+    },
+    "expedited": "Expedited",
+    "tabs": {
+      "discussion": "Discussion",
+      "details": "Details",
+      "votes": "Votes",
+      "deposits": "Deposits",
+      "json": "JSON"
+    },
+    "votesCols": {
+      "voter": "Voter",
+      "option": "Vote",
+      "power": "Power",
+      "voted": "Voted",
+      "tx": "Tx"
+    },
+    "depositsCols": {
+      "depositor": "Depositor",
+      "amount": "Amount",
+      "deposited": "Deposited",
+      "tx": "Tx"
+    },
+    "detail": {
+      "epoch": "Epoch",
+      "proposer": "Proposer",
+      "votingPeriod": "Voting period",
+      "totalDeposit": "Total deposit",
+      "voters": "Voters",
+      "turnoutQuorum": "Turnout / Quorum",
+      "weight": "Weight",
+      "tally": "Tally",
+      "failedReason": "Failed reason",
+      "metadataLink": "Metadata:",
+      "noMetadata": "No external metadata for this proposal."
+    },
+    "empty": {
+      "noProposals": "No proposals match the current filter.",
+      "noVotes": "No votes have been cast yet.",
+      "noDeposits": "No deposits recorded for this proposal."
+    },
+    "pagination": {
+      "prev": "Newer",
+      "next": "Older",
+      "page": "Page {{page}} of {{total}}"
+    },
+    "back": "← All proposals",
+    "notFound": "Proposal not found.",
+    "msg": {
+      "send": "Send",
+      "multiSend": "Multi-Send",
+      "grantPermission": "Grant Permission",
+      "revokePermission": "Revoke Permission",
+      "authzExec": "Authz Exec",
+      "vote": "Vote",
+      "proposalDeposit": "Proposal Deposit",
+      "submitProposal": "Submit Proposal",
+      "execLegacyContent": "Exec Legacy Content",
+      "textProposal": "Text Proposal",
+      "unjailValidator": "Unjail Validator",
+      "delegate": "Delegate",
+      "undelegate": "Undelegate",
+      "redelegate": "Redelegate",
+      "createValidator": "Create Validator",
+      "editValidator": "Edit Validator",
+      "withdrawReward": "Withdraw Reward",
+      "withdrawCommission": "Withdraw Commission",
+      "communityPoolSpend": "Community Pool Spend",
+      "fundCommunityPool": "Fund Community Pool",
+      "softwareUpgrade": "Software Upgrade",
+      "cancelUpgrade": "Cancel Upgrade",
+      "updateParamsBank": "Update Params (Bank)",
+      "updateParamsGov": "Update Params (Governance)",
+      "updateParamsSlashing": "Update Params (Slashing)",
+      "updateParamsStaking": "Update Params (Staking)",
+      "updateParamsDistribution": "Update Params (Distribution)",
+      "updateParamsMint": "Update Params (Mint)",
+      "updateParamsWasm": "Update Params (Wasm)",
+      "updateParamsCollateral": "Update Params (Collateral)",
+      "updateParamsRestrictions": "Update Params (Restrictions)",
+      "updateParamsStreamvesting": "Update Params (Stream Vesting)",
+      "updateParamsBookkeeper": "Update Params (Bookkeeper)",
+      "updateParamsInference": "Update Params (Inference)",
+      "contractExecute": "Contract Execute",
+      "contractInstantiate": "Instantiate Contract",
+      "contractInstantiate2": "Instantiate Contract v2",
+      "contractStoreCode": "Store Contract Code",
+      "contractMigrate": "Migrate Contract",
+      "contractUpdateAdmin": "Update Contract Admin",
+      "contractClearAdmin": "Clear Contract Admin",
+      "ibcUpdateClient": "IBC Update Client",
+      "ibcRecoverClient": "IBC Recover Client",
+      "ibcUpgradeClient": "IBC Upgrade Client",
+      "collateralDeposit": "Collateral Deposit",
+      "collateralWithdraw": "Collateral Withdraw",
+      "batchTransferWithVesting": "Batch Transfer With Vesting",
+      "registerModel": "Register Model",
+      "registerIbcTokenMetadata": "Register IBC Token Metadata",
+      "approveIbcTokenForTrading": "Approve IBC Token for Trading",
+      "addParticipantsToAllowList": "Add Participants to Allow List",
+      "removeParticipantsFromAllowList": "Remove Participants from Allow List",
+      "inferenceStart": "Inference Started",
+      "inferenceFinish": "Inference Finished",
+      "inferenceValidation": "Inference Validation",
+      "inferenceInvalidate": "Inference Invalidated",
+      "inferenceRevalidate": "Inference Revalidated",
+      "claimRewards": "Claim Rewards",
+      "pocBatchV1": "PoC Batch (v1)",
+      "pocValidationV1": "PoC Validation (v1)",
+      "pocCommit": "PoC Commit",
+      "pocValidation": "PoC Validation",
+      "submitSeed": "Submit Seed",
+      "bridgeExchange": "Bridge Exchange",
+      "newParticipant": "New Participant",
+      "hardwareUpdate": "Hardware Update",
+      "trainingKvRecord": "Training KV Record",
+      "joinTraining": "Join Training",
+      "trainingStatus": "Training Status",
+      "trainingHeartbeat": "Training Heartbeat",
+      "trainingBarrier": "Training Barrier",
+      "claimTrainingTask": "Claim Training Task",
+      "assignTrainingTask": "Assign Training Task",
+      "dkgDealerPart": "DKG Dealer Part",
+      "dkgVerificationVector": "DKG Verification Vector",
+      "thresholdSignatureRequest": "Threshold Signature Request",
+      "partialSignature": "Partial Signature",
+      "groupKeyValidation": "Group Key Validation"
+    }
+  },
+  "translation": {
+    "showOriginal": "🌐 Show original",
+    "showTranslation": "← Show translation",
+    "pending": "🌐 Translating…",
+    "failed": "Translation unavailable",
+    "translatedFromShort": "Translated from {{lang}}"
+  },
+  "comments": {
+    "title": "Discussion",
+    "empty": "No comments yet — be the first.",
+    "placeholder": "Share your thoughts…",
+    "post": "Post comment",
+    "posting": "Posting…",
+    "signInPrompt": "Sign in to comment",
+    "reply": "Reply",
+    "replyTo": "Reply to {{name}}…",
+    "replyPost": "Post reply",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this comment?",
+    "unknown": "unknown",
+    "like": "Like",
+    "dislike": "Dislike",
+    "signInToReact": "Sign in to react"
+  },
+  "newTender": {
+    "back": "Cancel",
+    "signInTitle": "Sign in to propose a tender",
+    "title": "Propose a tender",
+    "intro": "Tenders are indicative polls. The community votes with their GNK to signal priority. You can attach a wallet address in your profile to receive a reward if your tender is delivered.",
+    "titleField": "Title",
+    "titlePlaceholder": "e.g. Add WalletConnect support to the Gonka wallet",
+    "summary": "Summary",
+    "summaryPlaceholder": "One-paragraph pitch shown on the cards and shared in social previews.",
+    "summaryHint": "Min 10 chars. Optimal under 160 for clean social previews.",
+    "description": "Description (Markdown supported)",
+    "descriptionPlaceholder": "## Problem\n\n…\n\n## Proposal\n\n…\n\n## Why now\n\n…",
+    "edit": "Edit",
+    "preview": "Preview",
+    "previewEmpty": "Nothing to preview yet.",
+    "deadline": "Deadline",
+    "deadlineHint": "(min {{days}} days)",
+    "deadlineMinError": "Deadline must be at least {{days}} days from now.",
+    "deadlinePreview": "Will close on {{when}}",
+    "preset": {
+      "1w": "1 week",
+      "2w": "2 weeks",
+      "1m": "1 month",
+      "3m": "3 months"
+    },
+    "publish": "Publish tender",
+    "publishing": "Creating…"
+  },
+  "me": {
+    "viewPublic": "View public profile →",
+    "rewardWalletLabel": "Reward wallet (optional)",
+    "rewardWalletHint": "If a tender you propose is delivered, the community can choose to send a reward in GNK to this address. We never use it for voting on your behalf.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "✓ Saved",
+    "signOut": "Sign out"
+  },
+  "profile": {
+    "back": "← All tenders",
+    "wallet": "Wallet",
+    "tendersTitle": "Tenders by this user",
+    "tendersCount": "({{n}})",
+    "noTenders": "No tenders yet.",
+    "notFound": "User not found.",
+    "home": "← Home",
+    "loading": "Loading…"
+  }
+}

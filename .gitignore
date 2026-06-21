@@ -1,0 +1,40 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+*.log
+.DS_Store
+# Local env vars — never commit (only .env.template is tracked)
+.env
+**/__main__.py
+**/__init__.py
+.env.local
+.env.*.local
+.env.bak*
+config.env
+*.sqlite
+*.db
+cache/
+node_modules/
+*.local
+test_data/
+scanner_requests.xlsx
+
+# Google OAuth credential downloads — never commit
+client_secret_*.json
+*.client_secret.json
+
+# Build artifacts
+contract/artifacts/
+contract/target/
+contract/Cargo.lock

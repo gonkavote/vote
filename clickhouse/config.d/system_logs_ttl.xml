@@ -1,0 +1,90 @@
+<?xml version="1.0"?>
+<!--
+  3-day TTL for ClickHouse internal system log tables.
+
+  Applied via config.d (NOT a one-off ALTER migration) so the TTL is
+  re-asserted on every server start AND on every freshly created log table.
+  That matters because ClickHouse rotates a system log table (renames it to
+  <name>_N and creates a new one) whenever its column set changes across a
+  version upgrade — a one-time ALTER would be lost on the new table, but a
+  config TTL is applied to it automatically.
+
+  Rules followed (see ClickHouse #34929 and the system-tables docs):
+    * Use individual <partition_by>/<order_by>/<ttl> tags — NOT <engine>.
+      Mixing <engine> with <ttl>/<partition_by> makes the server throw and
+      exit at startup.
+    * partition_by/order_by MUST match the table's existing schema exactly,
+      otherwise ClickHouse treats it as a different table and rotates it
+      (the <name>_N duplication bug). Values below were read from
+      system.tables on 24.12.
+    * Do NOT put <ttl_only_drop_parts> / SETTINGS here — a differing SETTINGS
+      is itself enough to trigger the rotation/duplication. Plain row TTL is
+      sufficient to bound disk usage.
+
+  All tables: PARTITION BY toYYYYMMDD(event_date), ORDER BY (event_date, event_time)
+  except asynchronous_metric_log which orders by (metric, event_date, event_time).
+
+  NOTE: partition is per-DAY, not per-month. The 24.12 default is
+  toYYYYMM(event_date) — one part per month — and row-level TTL only fires
+  on a merge of that part. With a busy text_log (~65 lines/s here), the
+  live monthly partition grew to 962 MiB / 16.8M rows in 3 days, holding
+  the corresponding mark + uncompressed cache in CH memory the whole time
+  and pushing MemoryTracking close to its limit. Per-day partitions let
+  TTL cleanly drop yesterday's whole partition the next day — disk +
+  memory capped at ~1 day of logs as intended.
+-->
+<clickhouse>
+    <query_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </query_log>
+
+    <trace_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </trace_log>
+
+    <text_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </text_log>
+
+    <metric_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </metric_log>
+
+    <part_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </part_log>
+
+    <processors_profile_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </processors_profile_log>
+
+    <asynchronous_metric_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>metric, event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+
+    <error_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </error_log>
+
+    <query_metric_log>
+        <partition_by>toYYYYMMDD(event_date)</partition_by>
+        <order_by>event_date, event_time</order_by>
+        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
+    </query_metric_log>
+</clickhouse>

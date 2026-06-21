@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  background: #06060b;
+  color: #f0f0f5;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+
+@layer components {
+  .grad-text {
+    background: linear-gradient(135deg, #3b82f6 0%, #818cf8 50%, #c084fc 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#2563eb] text-white font-semibold text-sm transition-all hover:-translate-y-px;
+    box-shadow: 0 0 20px 2px rgba(59, 130, 246, .225), 0 0 8px 0 rgba(59, 130, 246, .175);
+  }
+  .btn-primary:hover {
+    background: #3b82f6;
+    box-shadow: 0 0 28px 4px rgba(59, 130, 246, .6), 0 0 12px 1px rgba(59, 130, 246, .5);
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-border text-text font-medium text-sm transition-all hover:bg-white/10 hover:-translate-y-px;
+  }
+
+  /* Telegram brand button — same shape as .btn-primary, brand colour. */
+  .btn-tg {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white font-semibold text-sm transition-all hover:-translate-y-px;
+    background: #54a9eb;
+    box-shadow: 0 0 20px 2px rgba(84, 169, 235, .175), 0 0 8px 0 rgba(84, 169, 235, .15);
+  }
+  .btn-tg:hover {
+    background: #6cb6ee;
+    box-shadow: 0 0 28px 4px rgba(84, 169, 235, .55), 0 0 12px 1px rgba(84, 169, 235, .45);
+  }
+
+  .card {
+    @apply bg-bg-card border border-border rounded-card p-6 transition-all;
+  }
+  .card-hover {
+    @apply hover:-translate-y-1 hover:border-accent/20;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
+  }
+}

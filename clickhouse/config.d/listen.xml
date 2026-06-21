@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!--
+  Make ClickHouse listen on all IPv4 interfaces.
+
+  The clickhouse-server:24.x image defaults <listen_host> to "::" (IPv6 any).
+  Hosts with IPv6 disabled fail every listener with "Address family for
+  hostname not supported" and ClickHouse silently falls back to 127.0.0.1
+  only — healthcheck (localhost) still passes, container shows healthy, but
+  the backend/translator/indexer over the docker bridge can't connect.
+  Binding 0.0.0.0 restores network access. (ClickHouse's own startup log
+  recommends exactly this fix.)
+-->
+<clickhouse>
+    <listen_host>0.0.0.0</listen_host>
+</clickhouse>
