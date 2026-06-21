@@ -69,8 +69,6 @@ def _render(*, title: str, description: str, url: str, body: str) -> str:
         f"<meta name=\"twitter:title\" content=\"{t}\">"
         f"<meta name=\"twitter:description\" content=\"{d}\">"
         f"<meta name=\"twitter:image\" content=\"{SITE_BASE}/images/prev.jpg\">"
-        # Refresh so any human who somehow lands here ends up on the SPA.
-        f"<meta http-equiv=\"refresh\" content=\"0; url={u}\">"
         f"</head><body>{body}</body></html>"
     )
 
