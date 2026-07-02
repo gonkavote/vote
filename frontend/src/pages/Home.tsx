@@ -128,7 +128,7 @@ export function HomePage() {
         </p>
         {me && (
           <div className="mt-8 relative">
-            <Link to="/proposals/new" className="btn-primary">{t('home.hero.propose')}</Link>
+            <Link to="/proposal/new" className="btn-primary">{t('home.hero.propose')}</Link>
           </div>
         )}
       </div>
@@ -186,7 +186,7 @@ export function HomePage() {
           <p className="text-text-2">
             {t('home.empty.noneSignedIn')}{' '}
             {me ? (
-              <Link className="text-accent" to="/proposals/new">{t('home.empty.beTheFirst')}</Link>
+              <Link className="text-accent" to="/proposal/new">{t('home.empty.beTheFirst')}</Link>
             ) : (
               t('home.empty.noneSignedOut')
             )}
@@ -257,7 +257,7 @@ function ProposalCard({ it, dim }: { it: ProposalSummary; dim?: boolean }) {
   const showOpenBadge = !expired && it.status === 'open'
   return (
     <Link
-      to={`/proposals/${it.id}`}
+      to={`/proposal/${it.id}`}
       className={`card card-hover block ${dim ? 'opacity-80 hover:opacity-100 transition-opacity' : ''}`}
     >
       <div className="flex items-center justify-between mb-3 gap-2">
