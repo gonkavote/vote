@@ -200,34 +200,6 @@ func (c *Client) GetNgonkaBalance(ctx context.Context, addr string) (*big.Int, e
 	return n, nil
 }
 
-// GetCollateral returns the participant's collateral in ngonka. Endpoint
-// returns code 5 ("not found") for non-participants — treat as zero.
-func (c *Client) GetCollateral(ctx context.Context, addr string) (*big.Int, error) {
-	u := fmt.Sprintf("%s/productscience/inference/collateral/collateral/%s", c.restURL, addr)
-	body, err := c.getJSON(ctx, u)
-	if err != nil {
-		// "not found" comes back as HTTP 200 with code:5 OR as 404; treat both as 0.
-		return big.NewInt(0), nil
-	}
-	var resp struct {
-		Collateral struct {
-			Amount string `json:"amount"`
-		} `json:"collateral"`
-		Code int `json:"code"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return big.NewInt(0), nil
-	}
-	if resp.Code != 0 || resp.Collateral.Amount == "" {
-		return big.NewInt(0), nil
-	}
-	n, ok := new(big.Int).SetString(resp.Collateral.Amount, 10)
-	if !ok {
-		return big.NewInt(0), nil
-	}
-	return n, nil
-}
-
 // GetVesting returns the total vesting balance in ngonka. Empty list = 0.
 func (c *Client) GetVesting(ctx context.Context, addr string) (*big.Int, error) {
 	u := fmt.Sprintf("%s/productscience/inference/streamvesting/total_vesting/%s", c.restURL, addr)

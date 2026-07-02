@@ -44,14 +44,12 @@ func (s *Refresher) Run(ctx context.Context) {
 // voterWeights bundles all per-voter metrics gathered for one snapshot.
 type voterWeights struct {
 	balance    *big.Int
-	collateral *big.Int
 	vesting    *big.Int
 	hostWeight *big.Int
 }
 
 func (vw voterWeights) community() *big.Int {
-	out := new(big.Int).Add(vw.balance, vw.collateral)
-	return out.Add(out, vw.vesting)
+	return new(big.Int).Add(vw.balance, vw.vesting)
 }
 
 func (s *Refresher) tickOnce(ctx context.Context) {
@@ -91,7 +89,7 @@ func (s *Refresher) tickOnce(ctx context.Context) {
 			AmountNgonka:      v.AmountNgonka,
 			WeightNgonka:      w.community(),
 			BalanceNgonka:     w.balance,
-			CollateralNgonka:  w.collateral,
+			CollateralNgonka:  big.NewInt(0),
 			VestingNgonka:     w.vesting,
 			HostWeight:        w.hostWeight,
 			TxHash:            v.TxHash,
@@ -107,9 +105,9 @@ func (s *Refresher) tickOnce(ctx context.Context) {
 		"voters", len(addrs), "rows", len(rows), "epoch", epoch)
 }
 
-// fetchWeights pulls balance + collateral + vesting + host_weight for every
-// address concurrently (bounded by BalanceConcurrency). Failures fall back
-// to zero so the snapshot always succeeds.
+// fetchWeights pulls balance + vesting + host_weight for every address
+// concurrently (bounded by BalanceConcurrency). Failures fall back to
+// zero so the snapshot always succeeds.
 func (s *Refresher) fetchWeights(ctx context.Context, addrs []string, epoch uint64) map[string]voterWeights {
 	out := make(map[string]voterWeights, len(addrs))
 	var mu sync.Mutex
@@ -139,10 +137,6 @@ func (s *Refresher) fetchOne(ctx context.Context, addr string, epoch uint64) vot
 		s.log.Warnw("balance fetch failed", "addr", addr, "err", err)
 		bal = big.NewInt(0)
 	}
-	col, err := s.rpc.GetCollateral(ctx, addr)
-	if err != nil {
-		col = big.NewInt(0)
-	}
 	vest, err := s.rpc.GetVesting(ctx, addr)
 	if err != nil {
 		vest = big.NewInt(0)
@@ -151,7 +145,6 @@ func (s *Refresher) fetchOne(ctx context.Context, addr string, epoch uint64) vot
 
 	return voterWeights{
 		balance:    bal,
-		collateral: col,
 		vesting:    vest,
 		hostWeight: hw,
 	}
