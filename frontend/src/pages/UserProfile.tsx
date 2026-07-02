@@ -70,18 +70,18 @@ export function UserProfilePage() {
 
       <section>
         <h2 className="text-lg font-bold mb-4">
-          {t('profile.tendersTitle')}{' '}
+          {t('profile.proposalsTitle')}{' '}
           <span className="text-text-2 text-sm font-normal">
-            {t('profile.tendersCount', { n: data.tenders.length })}
+            {t('profile.proposalsCount', { n: data.proposals.length })}
           </span>
         </h2>
-        {data.tenders.length === 0 ? (
+        {data.proposals.length === 0 ? (
           <div className="card text-center py-10 text-text-2">
-            {t('profile.noTenders')}
+            {t('profile.noProposals')}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.tenders.map((it) => {
+            {data.proposals.map((it) => {
               const expired = it.status === 'closed' || (!!it.closes_at && new Date(it.closes_at).getTime() <= Date.now())
               const showExpiredBadge = expired && it.status === 'open'
               const showClosedBadge = it.status === 'closed'
@@ -89,19 +89,19 @@ export function UserProfilePage() {
               return (
               <Link
                 key={it.id}
-                to={`/tenders/${it.id}`}
+                to={`/proposal/${it.id}`}
                 className="card card-hover block"
               >
                 <div className="flex items-center justify-between mb-3 gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     {showOpenBadge && (
                       <span className="pill flex-shrink-0 bg-emerald-500/10 text-emerald-400">
-                        {t('tender.status.open')}
+                        {t('proposal.status.open')}
                       </span>
                     )}
                     {showClosedBadge && (
                       <span className="pill flex-shrink-0 bg-white/5 text-text-2">
-                        {t('tender.status.closed')}
+                        {t('proposal.status.closed')}
                       </span>
                     )}
                     {showExpiredBadge && (

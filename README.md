@@ -1,7 +1,7 @@
 # Gonka Vote
 
-Community-driven tender portal for the [Gonka](https://gonka.ai) blockchain.
-Anyone with a Google account can propose a tender and discuss it; anyone with
+Community-driven proposal portal for the [Gonka](https://gonka.ai) blockchain.
+Anyone with a Google account can create a proposal and discuss it; anyone with
 GNK can vote on it from their wallet. Votes are weighted by current GNK balance
 and re-tallied every minute. Tenders here are **indicative** — they do not
 modify the chain or spend treasury funds. For binding governance use the
@@ -45,7 +45,7 @@ ClickHouse + Go indexer + FastAPI + React/Vite + Traefik.
   `MsgExecuteContract` targeting our contract, parses `{"vote":...}` messages,
   writes votes to ClickHouse, and refreshes per-voter ngonka balance snapshots
   every minute.
-- `backend/` — FastAPI app: tenders/comments/users CRUD, Google OAuth login,
+- `backend/` — FastAPI app: proposals/comments/users CRUD, Google OAuth login,
   signed-cookie sessions. Reads from ClickHouse only.
 - `frontend/` — Vite + React + TanStack Query + Tailwind, dark theme matching
   [gonka-vip](../gonka-vip/).
@@ -94,13 +94,13 @@ ClickHouse migrations are auto-applied on first start (mounted into
 ### 5. Test
 
 ```bash
-# Create a tender via the UI, copy its UUID, then vote from CLI:
+# Create a proposal via the UI, copy its UUID, then vote from CLI:
 inferenced tx wasm execute $CONTRACT_ADDRESS \
   '{"vote":{"tender_id":"<uuid>","choice":"yes"}}' \
   --from <your-key> --chain-id gonka-mainnet \
   --node http://node2.gonka.ai:8000/chain-rpc -y
 
-# Within ~60 s the tender page should show your vote weighted by your ngonka.
+# Within ~60 s the proposal page should show your vote weighted by your ngonka.
 ```
 
 ## Local dev
@@ -137,6 +137,6 @@ plain :80.
 
 - WalletConnect "Vote" button — needs `MsgExecuteContract` support added to
   the [Gonka wallet](../wallet/) (~50 lines of Dart).
-- Quorum / pass-fail thresholds per tender.
+- Quorum / pass-fail thresholds per proposal.
 - Tags / categories / search.
-- Reward distribution to tender authors.
+- Reward distribution to proposal authors.

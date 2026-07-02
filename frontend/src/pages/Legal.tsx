@@ -65,7 +65,7 @@ export function PrivacyPage() {
           it. You can remove it at any time.
         </li>
         <li>
-          <strong>Tender content.</strong> Titles, descriptions, and comments
+          <strong>Proposal content.</strong> Titles, descriptions, and comments
           you publish are stored and displayed publicly together with your name
           and email address.
         </li>
@@ -75,7 +75,7 @@ export function PrivacyPage() {
       <p>
         The Service indexes public on-chain data from the Gonka blockchain,
         including your wallet's bech32 address (<code>gonka1…</code>),
-        transaction hashes, votes you cast on tender contracts, and your public
+        transaction hashes, votes you cast on proposal contracts, and your public
         GNK balance. This information is already publicly visible on the
         blockchain and is read by us through public RPC endpoints. We do not
         link this on-chain data to your Google account unless you voluntarily
@@ -102,7 +102,7 @@ export function PrivacyPage() {
       <h2>2. How we use information</h2>
       <ul>
         <li>To authenticate you and keep you signed in.</li>
-        <li>To display your contributions (tenders, comments, votes) on the Service.</li>
+        <li>To display your contributions (proposals, comments, votes) on the Service.</li>
         <li>To compute and display GNK-weighted vote tallies.</li>
         <li>To prevent abuse, detect spam, and operate the Service securely.</li>
       </ul>
@@ -116,7 +116,7 @@ export function PrivacyPage() {
       <ul>
         <li>
           <strong>Publicly on the Service.</strong> Your name, email, profile
-          picture, optional wallet address, and any tenders or comments you
+          picture, optional wallet address, and any proposals or comments you
           post are visible to anyone who visits {SITE_URL}.
         </li>
         <li>
@@ -139,7 +139,7 @@ export function PrivacyPage() {
       <p>
         We retain account information and content you publish for as long as
         your account exists. If you delete your account (see Section 6 below),
-        we delete your profile information within 30 days; published tenders
+        we delete your profile information within 30 days; published proposals
         and comments may be anonymized rather than deleted to preserve the
         integrity of community discussions.
       </p>
@@ -225,7 +225,7 @@ export function TermsPage() {
       <h2>1. The Service</h2>
       <p>
         {SERVICE_NAME} is a community-driven portal for proposing and voting on
-        ideas ("tenders") related to the Gonka blockchain. Voting takes place
+        ideas ("proposals") related to the Gonka blockchain. Voting takes place
         on-chain via a public smart contract; the Service indexes the results
         and weights them by the voter's current GNK balance. The Service is{' '}
         <strong>indicative only</strong> — it does not modify the Gonka chain,
@@ -236,7 +236,7 @@ export function TermsPage() {
       <h2>2. Eligibility & accounts</h2>
       <p>
         You must be at least 13 years old (or the minimum age of digital
-        consent in your jurisdiction) to use the Service. To create tenders or
+        consent in your jurisdiction) to use the Service. To create proposals or
         comments you must sign in with a Google account; you are responsible
         for the security of that account and for all activity under it.
       </p>
@@ -276,7 +276,7 @@ export function TermsPage() {
       <h2>5. No financial advice; no token offering</h2>
       <p>
         Nothing on the Service is investment, financial, legal, or tax advice.
-        Tenders and discussion threads represent the views of their authors,
+        Proposals and discussion threads represent the views of their authors,
         not of {ENTITY}. The Service does not offer or sell securities, tokens,
         or financial products.
       </p>

@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 
 og_router = APIRouter()
 
-DEFAULT_TITLE = "Gonka Vote — Community tenders & on-chain governance"
+DEFAULT_TITLE = "Gonka Vote — Community proposals & on-chain governance"
 DEFAULT_DESCRIPTION = (
-    "Propose tenders, discuss them, and vote on on-chain proposals for the "
+    "Propose ideas, discuss them, and vote on on-chain proposals for the "
     "Gonka network. GNK-weighted indicative polls plus a translated mirror "
     "of every governance proposal."
 )
@@ -84,7 +84,7 @@ def _short(s: str, n: int = 200) -> str:
 
 @og_router.get("/", response_class=HTMLResponse)
 async def og_home(request: Request) -> HTMLResponse:
-    """Index page summary + list of recent tender titles for inbound crawlers."""
+    """Index page summary + list of recent proposal titles for inbound crawlers."""
     url = SITE_BASE + "/"
     body_lines: list[str] = [
         f"<h1>{html.escape(DEFAULT_TITLE)}</h1>",
@@ -95,20 +95,20 @@ async def og_home(request: Request) -> HTMLResponse:
         rows = await ch.query_rows(
             """
             SELECT id, title, summary
-            FROM gonka_vote.tenders FINAL
+            FROM gonka_vote.proposals FINAL
             WHERE deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT 50
             """
         )
         if rows:
-            body_lines.append("<h2>Recent tenders</h2><ul>")
+            body_lines.append("<h2>Recent proposals</h2><ul>")
             for r in rows:
                 tid = str(r["id"])
                 ttitle = html.escape(_short(r.get("title") or "", 120))
                 tsum = html.escape(_short(r.get("summary") or "", 200))
                 body_lines.append(
-                    f"<li><a href=\"{SITE_BASE}/tenders/{tid}\">{ttitle}</a>"
+                    f"<li><a href=\"{SITE_BASE}/proposal/{tid}\">{ttitle}</a>"
                     f"{(': ' + tsum) if tsum else ''}</li>"
                 )
             body_lines.append("</ul>")
@@ -125,9 +125,9 @@ async def og_home(request: Request) -> HTMLResponse:
     )
 
 
-@og_router.get("/tenders/{tender_id}", response_class=HTMLResponse)
-async def og_tender(tender_id: UUID, request: Request) -> HTMLResponse:
-    url = f"{SITE_BASE}/tenders/{tender_id}"
+@og_router.get("/proposal/{proposal_id}", response_class=HTMLResponse)
+async def og_proposal(proposal_id: UUID, request: Request) -> HTMLResponse:
+    url = f"{SITE_BASE}/proposal/{proposal_id}"
     fallback_body = f"<a href=\"{html.escape(url)}\">{html.escape(DEFAULT_TITLE)}</a>"
     fallback = HTMLResponse(
         _render(title=DEFAULT_TITLE, description=DEFAULT_DESCRIPTION, url=url, body=fallback_body),
@@ -138,13 +138,13 @@ async def og_tender(tender_id: UUID, request: Request) -> HTMLResponse:
         row = await ch.query_one(
             """
             SELECT title, summary, description
-            FROM gonka_vote.tenders FINAL
+            FROM gonka_vote.proposals FINAL
             WHERE id = {id:UUID} AND deleted_at IS NULL
             """,
-            {"id": str(tender_id)},
+            {"id": str(proposal_id)},
         )
     except Exception as e:
-        logger.warning("og tender %s: %s", tender_id, e)
+        logger.warning("og proposal %s: %s", proposal_id, e)
         return fallback
     if not row:
         return fallback
@@ -271,7 +271,7 @@ async def sitemap() -> Response:
         for r in await ch.query_rows(
             """
             SELECT id, COALESCE(updated_at, created_at) AS lastmod
-            FROM gonka_vote.tenders FINAL
+            FROM gonka_vote.proposals FINAL
             WHERE deleted_at IS NULL
             ORDER BY lastmod DESC
             LIMIT 5000
@@ -279,7 +279,7 @@ async def sitemap() -> Response:
         ):
             lm = r["lastmod"]
             iso = lm.strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(lm, datetime) else now_iso
-            urls.append(_u(f"{SITE_BASE}/tenders/{r['id']}", iso, "0.7", "daily"))
+            urls.append(_u(f"{SITE_BASE}/proposal/{r['id']}", iso, "0.7", "daily"))
 
         for r in await ch.query_rows(
             """

@@ -8,7 +8,7 @@ export interface ApiError extends Error {
 }
 
 /** Append ?lang={current ui locale} to GETs so the backend can swap in
- * translations from tenders.title_t / comments.body_t when present. */
+ * translations from proposals.title_t / comments.body_t when present. */
 function withLang(path: string): string {
   const lng = (i18n.resolvedLanguage || i18n.language || '').slice(0, 2)
   if (!lng) return path
@@ -57,7 +57,7 @@ export interface Tally {
 
 export type TranslationStatus = 'ready' | 'pending' | 'failed'
 
-export interface TenderSummary {
+export interface ProposalSummary {
   id: string
   title: string
   summary: string
@@ -85,7 +85,7 @@ export interface VoterEntry {
   voted_at: string | null
 }
 
-export interface TenderDetail extends TenderSummary {
+export interface ProposalDetail extends ProposalSummary {
   description: string
   creator_wallet: string | null
   voters: VoterEntry[]
@@ -125,7 +125,7 @@ export interface UserPublicProfile {
   name: string | null
   image: string | null
   wallet_address: string | null
-  tenders: TenderSummary[]
+  proposals: ProposalSummary[]
 }
 
 export interface Config {

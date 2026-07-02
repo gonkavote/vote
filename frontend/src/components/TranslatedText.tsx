@@ -1,8 +1,8 @@
-// Renders user-generated text (tender title/summary/description, comment body)
+// Renders user-generated text (proposal title/summary/description, comment body)
 // with a small toggle that lets the reader flip between the translation and
 // the original. The actual choice is *controlled* from outside (`mode` prop)
 // so several fields of one entity (e.g. title + summary + description of a
-// tender) can be flipped together by a single header button.
+// proposal) can be flipped together by a single header button.
 //
 // Flow:
 //   - status='pending' → show original + 🌐 Translating… pill (no toggle yet).
@@ -50,7 +50,7 @@ export function TranslatedText({
 /**
  * Pill-shaped button that flips between translated ↔ original. Also surfaces
  * the 'pending' state. Use it once per entity (one button for the whole
- * tender, not three).
+ * proposal, not three).
  */
 export function TranslationToggle({
   isTranslated,

@@ -52,7 +52,7 @@ export function setRuntimeConfig(cfg: {
     chainId: cfg.chainId,
     caipChainId: `cosmos:${cfg.chainId}`,
     appName: 'Gonka Vote',
-    appDescription: 'Community voting on Gonka tenders',
+    appDescription: 'Community voting on Gonka proposals',
     appUrl: url,
     appIcon: `${url}/images/logo.png`,
   }
@@ -158,7 +158,7 @@ export async function getAccount(session: SessionTypes.Struct): Promise<CosmosAc
 
 export interface VoteParams {
   contractAddress: string
-  tenderId: string
+  proposalId: string
   amountNgonka: string  // decimal string
   restUrl: string       // /chain-api root
 }
@@ -192,7 +192,7 @@ export interface BroadcastResult {
 /**
  * Wrap one Any message into a SignDirect tx, ask the wallet to sign it via
  * WalletConnect, then broadcast via REST. Used by both castVote (CosmWasm
- * MsgExecuteContract → tender) and castGovVote (Cosmos gov MsgVote).
+ * MsgExecuteContract → proposal) and castGovVote (Cosmos gov MsgVote).
  */
 async function _signAndBroadcast(
   session: SessionTypes.Struct,
@@ -288,7 +288,7 @@ export async function castVote(
   params: VoteParams,
 ): Promise<BroadcastResult> {
   const voteJson = JSON.stringify({
-    vote: { tender_id: params.tenderId, amount: params.amountNgonka },
+    vote: { tender_id: params.proposalId, amount: params.amountNgonka },
   })
   const msg = MsgExecuteContract.fromPartial({
     sender: account.address,

@@ -74,7 +74,7 @@ func (c *Client) SetCheckpoint(ctx context.Context, task string, height uint64) 
 // ----------------------------------------------------------------------------
 
 type VoteRow struct {
-	TenderID     string
+	ProposalID     string
 	Voter        string
 	AmountNgonka *big.Int
 	Height       uint64
@@ -87,7 +87,7 @@ func (c *Client) InsertVotes(ctx context.Context, rows []VoteRow) error {
 		return nil
 	}
 	batch, err := c.conn.PrepareBatch(ctx,
-		`INSERT INTO gonka_vote.votes (tender_id, voter, amount_ngonka, height, tx_hash, timestamp)`)
+		`INSERT INTO gonka_vote.votes (proposal_id, voter, amount_ngonka, height, tx_hash, timestamp)`)
 	if err != nil {
 		return fmt.Errorf("prepare votes batch: %w", err)
 	}
@@ -96,29 +96,29 @@ func (c *Client) InsertVotes(ctx context.Context, rows []VoteRow) error {
 		if amt == nil {
 			amt = big.NewInt(0)
 		}
-		if err := batch.Append(r.TenderID, r.Voter, amt, r.Height, r.TxHash, r.Timestamp); err != nil {
+		if err := batch.Append(r.ProposalID, r.Voter, amt, r.Height, r.TxHash, r.Timestamp); err != nil {
 			return fmt.Errorf("append vote: %w", err)
 		}
 	}
 	return batch.Send()
 }
 
-// ListOpenTenderVoters returns (tender_id, voter, amount_ngonka, tx_hash,
-// voted_at) for OPEN tenders. Used by snapshot refresher.
+// ListOpenProposalVoters returns (proposal_id, voter, amount_ngonka, tx_hash,
+// voted_at) for OPEN proposals. Used by snapshot refresher.
 type VoterRow struct {
-	TenderID     string
+	ProposalID     string
 	Voter        string
 	AmountNgonka *big.Int
 	TxHash       string
 	VotedAt      time.Time
 }
 
-func (c *Client) ListOpenTenderVoters(ctx context.Context) ([]VoterRow, error) {
+func (c *Client) ListOpenProposalVoters(ctx context.Context) ([]VoterRow, error) {
 	rows, err := c.conn.Query(ctx, `
-		SELECT v.tender_id, v.voter, v.amount_ngonka, v.tx_hash, v.timestamp
+		SELECT v.proposal_id, v.voter, v.amount_ngonka, v.tx_hash, v.timestamp
 		FROM gonka_vote.votes v FINAL
-		WHERE v.tender_id IN (
-			SELECT toString(id) FROM gonka_vote.tenders FINAL
+		WHERE v.proposal_id IN (
+			SELECT toString(id) FROM gonka_vote.proposals FINAL
 			WHERE status = 'open' AND deleted_at IS NULL
 		)
 	`)
@@ -130,17 +130,17 @@ func (c *Client) ListOpenTenderVoters(ctx context.Context) ([]VoterRow, error) {
 	var out []VoterRow
 	for rows.Next() {
 		var (
-			tenderID string
+			proposalID string
 			voter    string
 			amount   *big.Int
 			txHash   string
 			votedAt  time.Time
 		)
-		if err := rows.Scan(&tenderID, &voter, &amount, &txHash, &votedAt); err != nil {
+		if err := rows.Scan(&proposalID, &voter, &amount, &txHash, &votedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, VoterRow{
-			TenderID: tenderID, Voter: voter, AmountNgonka: amount,
+			ProposalID: proposalID, Voter: voter, AmountNgonka: amount,
 			TxHash: txHash, VotedAt: votedAt,
 		})
 	}
@@ -152,7 +152,7 @@ func (c *Client) ListOpenTenderVoters(ctx context.Context) ([]VoterRow, error) {
 // ----------------------------------------------------------------------------
 
 type SnapshotRow struct {
-	TenderID         string
+	ProposalID         string
 	Voter            string
 	AmountNgonka     *big.Int
 	WeightNgonka     *big.Int // legacy: equal to BalanceNgonka+CollateralNgonka+VestingNgonka
@@ -170,7 +170,7 @@ func (c *Client) InsertSnapshots(ctx context.Context, rows []SnapshotRow) error 
 	}
 	batch, err := c.conn.PrepareBatch(ctx,
 		`INSERT INTO gonka_vote.vote_snapshots
-		    (tender_id, voter, amount_ngonka, weight_ngonka,
+		    (proposal_id, voter, amount_ngonka, weight_ngonka,
 		     balance_ngonka, collateral_ngonka, vesting_ngonka, host_weight,
 		     tx_hash, voted_at, refreshed_at)`)
 	if err != nil {
@@ -190,7 +190,7 @@ func (c *Client) InsertSnapshots(ctx context.Context, rows []SnapshotRow) error 
 			votedAt = &t
 		}
 		if err := batch.Append(
-			r.TenderID,
+			r.ProposalID,
 			r.Voter,
 			zero(r.AmountNgonka),
 			zero(r.WeightNgonka),

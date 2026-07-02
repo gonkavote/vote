@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Markdown } from '../lib/markdown'
-import { api, TenderDetail } from '../lib/api'
+import { api, ProposalDetail } from '../lib/api'
 import { useAppConfig, useTrackerLinks } from '../lib/useAppConfig'
 import { TallyStats } from '../components/TallyStats'
 import { Comments } from '../components/Comments'
@@ -14,15 +14,15 @@ import { TranslatedText, TranslationToggle, type TranslationMode } from '../comp
 import { formatCount, formatDateTime, formatGNK, formatRelative } from '../lib/format'
 import { useMe } from '../hooks/useMe'
 
-export function TenderDetailPage() {
+export function ProposalDetailPage() {
   const { t, i18n } = useTranslation()
   const lng = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
   const { data: me } = useMe()
-  const { data: tender, isLoading, error } = useQuery({
-    queryKey: ['tender', id, lng],
-    queryFn: () => api.get<TenderDetail>(`/tenders/${id}`),
+  const { data: proposal, isLoading, error } = useQuery({
+    queryKey: ['proposal', id, lng],
+    queryFn: () => api.get<ProposalDetail>(`/proposal/${id}`),
     enabled: !!id,
     refetchInterval: 30_000,
   })
@@ -32,61 +32,61 @@ export function TenderDetailPage() {
   const [translationMode, setTranslationMode] = useState<TranslationMode>('translated')
 
   const deleteMut = useMutation({
-    mutationFn: () => api.delete(`/tenders/${id}`),
+    mutationFn: () => api.delete(`/proposal/${id}`),
     onSuccess: () => nav('/'),
   })
 
   const onDelete = () => {
-    if (!tender) return
-    if (window.confirm(t('tender.deleteConfirm', { title: tender.title }))) {
+    if (!proposal) return
+    if (window.confirm(t('proposal.deleteConfirm', { title: proposal.title }))) {
       deleteMut.mutate()
     }
   }
   const { data: config } = useAppConfig()
 
-  if (isLoading) return <p className="text-text-2 max-w-[1400px] mx-auto px-5 py-12">{t('tender.loading')}</p>
-  if (error || !tender) {
+  if (isLoading) return <p className="text-text-2 max-w-[1400px] mx-auto px-5 py-12">{t('proposal.loading')}</p>
+  if (error || !proposal) {
     return (
       <div className="max-w-[1400px] mx-auto px-5 py-12">
-        <p className="text-rose-400">{t('tender.notFound')}</p>
-        <Link to="/" className="btn-ghost mt-4 inline-flex">{t('tender.back2')}</Link>
+        <p className="text-rose-400">{t('proposal.notFound')}</p>
+        <Link to="/" className="btn-ghost mt-4 inline-flex">{t('proposal.back2')}</Link>
       </div>
     )
   }
 
-  const closed = tender.status === 'closed'
+  const closed = proposal.status === 'closed'
   // Indexer flips status='open' → 'closed' a few minutes after closes_at;
   // until then we show a single "expired" badge instead of stacking
   // 'open' + 'expired' contradictorily.
-  const expired = !closed && !!tender.closes_at &&
-    new Date(tender.closes_at).getTime() <= Date.now()
+  const expired = !closed && !!proposal.closes_at &&
+    new Date(proposal.closes_at).getTime() <= Date.now()
   const showOpenBadge = !closed && !expired
-  const effectiveStatus: 'open' | 'closed' = expired ? 'closed' : tender.status
+  const effectiveStatus: 'open' | 'closed' = expired ? 'closed' : proposal.status
 
   // Sidebar contents — re-used in two slots: between description-area and
   // comments on mobile, and as the right column on desktop.
   const sidebar = (
     <div className="space-y-4">
-      {tender.closes_at && (
+      {proposal.closes_at && (
         <div className="card">
-          <CountdownBig closesAt={tender.closes_at} status={tender.status} />
+          <CountdownBig closesAt={proposal.closes_at} status={proposal.status} />
           <div className="text-text-2 text-xs mt-2">
-            {formatDateTime(tender.closes_at)}
+            {formatDateTime(proposal.closes_at)}
           </div>
         </div>
       )}
       <HowToVote
-        tenderId={tender.id}
+        proposalId={proposal.id}
         config={config}
         disabled={closed}
-        defaultBidNgonka={tender.tally.weighted_avg_bid_ngonka}
+        defaultBidNgonka={proposal.tally.weighted_avg_bid_ngonka}
       />
       <div className="card text-xs text-text-2 space-y-2 leading-relaxed">
-        <p><strong className="text-text">{t('tender.sidebar.tenderId')}</strong></p>
-        <p className="font-mono break-all">{tender.id}</p>
+        <p><strong className="text-text">{t('proposal.sidebar.proposalId')}</strong></p>
+        <p className="font-mono break-all">{proposal.id}</p>
         {config?.contract_address && (
           <>
-            <p className="pt-2"><strong className="text-text">{t('tender.sidebar.contract')}</strong></p>
+            <p className="pt-2"><strong className="text-text">{t('proposal.sidebar.contract')}</strong></p>
             <p className="font-mono break-all">{config.contract_address}</p>
           </>
         )}
@@ -98,7 +98,7 @@ export function TenderDetailPage() {
     <div className="max-w-[1400px] mx-auto px-5 md:px-12 py-12">
       <div className="mb-8">
         <Link to="/" className="text-text-2 text-sm hover:text-accent">
-          {t('tender.back')}
+          {t('proposal.back')}
         </Link>
       </div>
 
@@ -109,12 +109,12 @@ export function TenderDetailPage() {
           <div className="flex flex-wrap items-center gap-3 mb-4">
             {showOpenBadge && (
               <span className="pill bg-emerald-500/10 text-emerald-400">
-                {t('tender.status.open')}
+                {t('proposal.status.open')}
               </span>
             )}
             {closed && (
               <span className="pill bg-white/5 text-text-2">
-                {t('tender.status.closed')}
+                {t('proposal.status.closed')}
               </span>
             )}
             {expired && (
@@ -122,44 +122,44 @@ export function TenderDetailPage() {
                 {t('countdown.expired')}
               </span>
             )}
-            <CountdownPill closesAt={tender.closes_at} status={effectiveStatus} />
+            <CountdownPill closesAt={proposal.closes_at} status={effectiveStatus} />
             <TranslationToggle
-              isTranslated={tender.is_translated}
-              status={tender.translation_status}
+              isTranslated={proposal.is_translated}
+              status={proposal.translation_status}
               mode={translationMode}
               onChange={setTranslationMode}
-              sourceLang={tender.source_lang}
+              sourceLang={proposal.source_lang}
             />
             <span className="text-xs text-text-2 flex items-center gap-1">
-              {t('tender.by')}{' '}
-              {tender.creator_uid ? (
+              {t('proposal.by')}{' '}
+              {proposal.creator_uid ? (
                 <Link
-                  to={`/u/${tender.creator_uid}`}
+                  to={`/u/${proposal.creator_uid}`}
                   className="hover:text-accent inline-flex items-center gap-1.5"
                 >
                   <Avatar
-                    src={tender.creator_image}
-                    name={tender.creator_name}
-                    email={tender.creator_uid}
+                    src={proposal.creator_image}
+                    name={proposal.creator_name}
+                    email={proposal.creator_uid}
                     size={6}
                   />
-                  <span>{tender.creator_name || tender.creator_uid}</span>
+                  <span>{proposal.creator_name || proposal.creator_uid}</span>
                 </Link>
               ) : (
-                <span>{t('tender.unknown')}</span>
+                <span>{t('proposal.unknown')}</span>
               )}
               {' · '}
-              {formatRelative(tender.created_at)}
+              {formatRelative(proposal.created_at)}
             </span>
           </div>
           <div className="flex items-start justify-between gap-4">
             <TranslatedText
               as="h1"
               className="text-3xl md:text-4xl font-extrabold leading-tight tracking-tight"
-              translated={tender.title}
-              original={tender.original_title}
-              isTranslated={tender.is_translated}
-              status={tender.translation_status}
+              translated={proposal.title}
+              original={proposal.original_title}
+              isTranslated={proposal.is_translated}
+              status={proposal.translation_status}
               mode={translationMode}
             />
             {me?.is_admin && (
@@ -167,20 +167,20 @@ export function TenderDetailPage() {
                 onClick={onDelete}
                 disabled={deleteMut.isPending}
                 className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
-                title={t('tender.delete')}
+                title={t('proposal.delete')}
               >
-                {deleteMut.isPending ? t('tender.deleting') : t('tender.delete')}
+                {deleteMut.isPending ? t('proposal.deleting') : t('proposal.delete')}
               </button>
             )}
           </div>
-          {tender.summary && (
+          {proposal.summary && (
             <TranslatedText
               as="p"
               className="mt-4 text-text-2 text-base md:text-lg leading-relaxed"
-              translated={tender.summary}
-              original={tender.original_summary}
-              isTranslated={tender.is_translated}
-              status={tender.translation_status}
+              translated={proposal.summary}
+              original={proposal.original_summary}
+              isTranslated={proposal.is_translated}
+              status={proposal.translation_status}
               mode={translationMode}
             />
           )}
@@ -196,39 +196,39 @@ export function TenderDetailPage() {
           <TranslatedText
             as="article"
             className="card prose prose-invert prose-sm max-w-none prose-a:text-accent prose-headings:text-text"
-            translated={tender.description}
-            original={tender.original_description}
-            isTranslated={tender.is_translated}
-            status={tender.translation_status}
+            translated={proposal.description}
+            original={proposal.original_description}
+            isTranslated={proposal.is_translated}
+            status={proposal.translation_status}
             mode={translationMode}
             render={(text) => <Markdown>{text}</Markdown>}
           />
 
           <section className="card">
-            <TallyStats tally={tender.tally} />
-            {tender.tally.refreshed_at && (
+            <TallyStats tally={proposal.tally} />
+            {proposal.tally.refreshed_at && (
               <p className="text-[11px] text-text-2 mt-4">
-                {t('tender.tally.refreshed', { when: formatRelative(tender.tally.refreshed_at) })}
+                {t('proposal.tally.refreshed', { when: formatRelative(proposal.tally.refreshed_at) })}
               </p>
             )}
           </section>
 
-          {tender.voters.length > 0 && (
+          {proposal.voters.length > 0 && (
             <section className="card">
               <h2 className="text-lg font-bold mb-4">
-                {t('tender.voters.title')}{' '}
+                {t('proposal.voters.title')}{' '}
                 <span className="text-text-2 text-sm font-normal">
-                  ({tender.voters.length})
+                  ({proposal.voters.length})
                 </span>
               </h2>
-              <VotersTable voters={tender.voters} />
+              <VotersTable voters={proposal.voters} />
             </section>
           )}
 
           {/* Sidebar inline on mobile only — sits between Voters and Comments. */}
           <div className="lg:hidden">{sidebar}</div>
 
-          <Comments tenderId={tender.id} />
+          <Comments proposalId={proposal.id} />
         </div>
 
         <aside className="hidden lg:block">{sidebar}</aside>
@@ -243,7 +243,7 @@ export function TenderDetailPage() {
  * column is hidden on small screens (it's a niche per-host metric).
  *
  * Pagination: client-side, 10 rows per page. The full list is already in
- * memory from /api/tenders/{id}, so "Show next 10" just bumps a counter.
+ * memory from /api/proposals/{id}, so "Show next 10" just bumps a counter.
  */
 const PAGE_SIZE = 10
 
@@ -267,7 +267,7 @@ function bi(s: string | number | null | undefined): bigint {
   }
 }
 
-function VotersTable({ voters }: { voters: TenderDetail['voters'] }) {
+function VotersTable({ voters }: { voters: ProposalDetail['voters'] }) {
   const { t } = useTranslation()
   const { data: cfg } = useAppConfig()
   const trackerLinks = useTrackerLinks(cfg)
@@ -331,21 +331,21 @@ function VotersTable({ voters }: { voters: TenderDetail['voters'] }) {
       {/* header */}
       <div className="flex items-center gap-3 px-1 mb-1">
         <SortHeader className={`flex-1 min-w-0 ${headerCls}`} active={sortKey === 'address'} order={order} onClick={() => click('address')}>
-          {t('tender.voters.address')}
+          {t('proposal.voters.address')}
         </SortHeader>
         <SortHeader className={`w-20 justify-end ${headerCls}`} active={sortKey === 'grant'} order={order} onClick={() => click('grant')}>
-          {t('tender.voters.grant')}
+          {t('proposal.voters.grant')}
         </SortHeader>
         <SortHeader className={`w-20 justify-end ${headerCls}`} active={sortKey === 'balance'} order={order} onClick={() => click('balance')}>
-          {t('tender.voters.weight')}
+          {t('proposal.voters.weight')}
         </SortHeader>
         <SortHeader className={`w-16 justify-end ${headerCls} hidden md:inline-flex`} active={sortKey === 'hosts'} order={order} onClick={() => click('hosts')}>
-          {t('tender.voters.hostsCol')}
+          {t('proposal.voters.hostsCol')}
         </SortHeader>
         <SortHeader className={`w-20 justify-end ${headerCls}`} active={sortKey === 'voted'} order={order} onClick={() => click('voted')}>
-          {t('tender.voters.voted')}
+          {t('proposal.voters.voted')}
         </SortHeader>
-        <span className={`w-6 text-right ${headerCls}`}>{t('tender.voters.tx')}</span>
+        <span className={`w-6 text-right ${headerCls}`}>{t('proposal.voters.tx')}</span>
       </div>
 
       {visible.map((v) => (
@@ -389,8 +389,8 @@ function VotersTable({ voters }: { voters: TenderDetail['voters'] }) {
                 href={trackerLinks.tx(v.tx_hash)}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={t('tender.voters.openTx', { hash: v.tx_hash })}
-                aria-label={t('tender.voters.openTracker')}
+                title={t('proposal.voters.openTx', { hash: v.tx_hash })}
+                aria-label={t('proposal.voters.openTracker')}
                 className="text-accent hover:text-accent-2 inline-flex items-center justify-center"
               >
                 <ExternalLinkIcon />
@@ -405,7 +405,7 @@ function VotersTable({ voters }: { voters: TenderDetail['voters'] }) {
       {remaining > 0 && (
         <div className="flex items-center justify-between gap-2 pt-3 mt-2 border-t border-border">
           <span className="text-xs text-text-2">
-            {t('tender.voters.showingOf', { shown: visible.length, total: sorted.length })}
+            {t('proposal.voters.showingOf', { shown: visible.length, total: sorted.length })}
           </span>
           <div className="flex gap-2">
             <button
@@ -413,7 +413,7 @@ function VotersTable({ voters }: { voters: TenderDetail['voters'] }) {
               onClick={() => setShown((n) => n + PAGE_SIZE)}
               className="btn-ghost text-xs"
             >
-              {t('tender.voters.showMore', { n: Math.min(PAGE_SIZE, remaining) })}
+              {t('proposal.voters.showMore', { n: Math.min(PAGE_SIZE, remaining) })}
             </button>
             {remaining > PAGE_SIZE && (
               <button
@@ -421,7 +421,7 @@ function VotersTable({ voters }: { voters: TenderDetail['voters'] }) {
                 onClick={() => setShown(sorted.length)}
                 className="btn-ghost text-xs"
               >
-                {t('tender.voters.showAll')}
+                {t('proposal.voters.showAll')}
               </button>
             )}
           </div>
@@ -435,7 +435,7 @@ function VotersTable({ voters }: { voters: TenderDetail['voters'] }) {
             onClick={() => setShown(PAGE_SIZE)}
             className="btn-ghost text-xs"
           >
-            {t('tender.voters.showLess')}
+            {t('proposal.voters.showLess')}
           </button>
         </div>
       )}

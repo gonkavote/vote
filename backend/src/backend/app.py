@@ -114,6 +114,6 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(api_router)
 app.include_router(gov_router)
 app.include_router(telegram_webhook_router, prefix="/api")
-# Bot-only OG/Twitter card SSR for /tenders/{id}. Traefik routes
+# Bot-only OG/Twitter card SSR for /proposal/{id}. Traefik routes
 # crawler user-agents here; real browsers go straight to the SPA.
 app.include_router(og_router)

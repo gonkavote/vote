@@ -22,19 +22,19 @@ export function CommentNode({
   ownerId,
   apiBase,
   // legacy alias
-  tenderId,
+  proposalId,
 }: {
   comment: CommentTreeNode
   depth: number
   /** Cache key — same value passed by parent <Comments>. */
   ownerId?: string
-  /** API base for replies, e.g. '/tenders/abc' or '/governance/proposals/42'. */
+  /** API base for replies, e.g. '/proposal/abc' or '/governance/proposals/42'. */
   apiBase?: string
-  /** @deprecated kept for the existing TenderDetail call site. */
-  tenderId?: string
+  /** @deprecated kept for the existing ProposalDetail call site. */
+  proposalId?: string
 }) {
-  const id = ownerId ?? tenderId ?? ''
-  const base = apiBase ?? `/tenders/${id}`
+  const id = ownerId ?? proposalId ?? ''
+  const base = apiBase ?? `/proposal/${id}`
   const { t } = useTranslation()
   const { data: me } = useMe()
   const qc = useQueryClient()

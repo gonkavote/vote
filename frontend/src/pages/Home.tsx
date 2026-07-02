@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
-import { api, Tally, TenderSummary } from '../lib/api'
+import { api, Tally, ProposalSummary } from '../lib/api'
 import { TallyStats } from '../components/TallyStats'
 import { CountdownPill } from '../components/Countdown'
 import { formatRelative } from '../lib/format'
@@ -45,9 +45,9 @@ function tallyValue(t: Tally, key: SortKey): bigint {
 
 type Bucket = 'all' | 'active' | 'expired'
 
-/** A tender is "expired" when the chain marks it closed OR its deadline
+/** A proposal is "expired" when the chain marks it closed OR its deadline
  *  has already passed (the indexer flips the status with a small lag). */
-function isExpired(t: TenderSummary): boolean {
+function isExpired(t: ProposalSummary): boolean {
   if (t.status === 'closed') return true
   if (!t.closes_at) return false
   return new Date(t.closes_at).getTime() <= Date.now()
@@ -56,9 +56,9 @@ function isExpired(t: TenderSummary): boolean {
 export function HomePage() {
   const { t, i18n } = useTranslation()
   const lng = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
-  const { data: tenders, isLoading } = useQuery({
-    queryKey: ['tenders', lng],
-    queryFn: () => api.get<TenderSummary[]>('/tenders'),
+  const { data: proposals, isLoading } = useQuery({
+    queryKey: ['proposals', lng],
+    queryFn: () => api.get<ProposalSummary[]>('/proposals'),
     refetchInterval: 30_000,
   })
   const { data: me } = useMe()
@@ -68,11 +68,11 @@ export function HomePage() {
 
   const sortFn = useMemo(() => {
     if (sort === 'newest') {
-      return (a: TenderSummary, b: TenderSummary) =>
+      return (a: ProposalSummary, b: ProposalSummary) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     }
     const asc = sort.endsWith('_asc')
-    return (a: TenderSummary, b: TenderSummary) => {
+    return (a: ProposalSummary, b: ProposalSummary) => {
       const va = tallyValue(a.tally, sort)
       const vb = tallyValue(b.tally, sort)
       if (va === vb) return 0
@@ -81,13 +81,13 @@ export function HomePage() {
   }, [sort])
 
   const { activeList, expiredList, totalMatching } = useMemo(() => {
-    if (!tenders) return { activeList: [], expiredList: [], totalMatching: 0 }
+    if (!proposals) return { activeList: [], expiredList: [], totalMatching: 0 }
     const q = query.trim().toLowerCase()
-    const matchesQuery = (t: TenderSummary) =>
+    const matchesQuery = (t: ProposalSummary) =>
       !q || (t.title + ' ' + (t.summary || '')).toLowerCase().includes(q)
-    const active: TenderSummary[] = []
-    const expired: TenderSummary[] = []
-    for (const t of tenders) {
+    const active: ProposalSummary[] = []
+    const expired: ProposalSummary[] = []
+    for (const t of proposals) {
       if (!matchesQuery(t)) continue
       ;(isExpired(t) ? expired : active).push(t)
     }
@@ -100,7 +100,7 @@ export function HomePage() {
       expiredList: expired,
       totalMatching: active.length + expired.length,
     }
-  }, [tenders, query, sortFn, sort])
+  }, [proposals, query, sortFn, sort])
 
   const showActive = bucket !== 'expired'
   const showExpired = bucket !== 'active'
@@ -128,7 +128,7 @@ export function HomePage() {
         </p>
         {me && (
           <div className="mt-8 relative">
-            <Link to="/tenders/new" className="btn-primary">{t('home.hero.propose')}</Link>
+            <Link to="/proposals/new" className="btn-primary">{t('home.hero.propose')}</Link>
           </div>
         )}
       </div>
@@ -137,11 +137,11 @@ export function HomePage() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
         <h2 className="text-xl font-bold flex-shrink-0">
           {t('home.list.title')}{' '}
-          {tenders && (
+          {proposals && (
             <span className="text-text-2 text-sm font-normal">
-              {totalMatching !== tenders.length
-                ? t('home.list.countOf', { shown: totalMatching, total: tenders.length })
-                : t('home.list.count', { n: tenders.length })}
+              {totalMatching !== proposals.length
+                ? t('home.list.countOf', { shown: totalMatching, total: proposals.length })
+                : t('home.list.count', { n: proposals.length })}
             </span>
           )}
         </h2>
@@ -180,20 +180,20 @@ export function HomePage() {
         </div>
       </div>
 
-      {isLoading && <p className="text-text-2">{t('tender.loading')}</p>}
-      {!isLoading && (!tenders || tenders.length === 0) && (
+      {isLoading && <p className="text-text-2">{t('proposal.loading')}</p>}
+      {!isLoading && (!proposals || proposals.length === 0) && (
         <div className="card text-center py-16">
           <p className="text-text-2">
             {t('home.empty.noneSignedIn')}{' '}
             {me ? (
-              <Link className="text-accent" to="/tenders/new">{t('home.empty.beTheFirst')}</Link>
+              <Link className="text-accent" to="/proposals/new">{t('home.empty.beTheFirst')}</Link>
             ) : (
               t('home.empty.noneSignedOut')
             )}
           </p>
         </div>
       )}
-      {!isLoading && tenders && tenders.length > 0 && totalMatching === 0 && (
+      {!isLoading && proposals && proposals.length > 0 && totalMatching === 0 && (
         <div className="card text-center py-16">
           <p className="text-text-2">
             {t('home.empty.noMatch')}
@@ -227,7 +227,7 @@ function Section({
 }: {
   title: string
   accent: 'emerald' | 'muted'
-  items: TenderSummary[]
+  items: ProposalSummary[]
   dim?: boolean
 }) {
   return (
@@ -239,14 +239,14 @@ function Section({
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map((it) => (
-          <TenderCard key={it.id} it={it} dim={dim} />
+          <ProposalCard key={it.id} it={it} dim={dim} />
         ))}
       </div>
     </section>
   )
 }
 
-function TenderCard({ it, dim }: { it: TenderSummary; dim?: boolean }) {
+function ProposalCard({ it, dim }: { it: ProposalSummary; dim?: boolean }) {
   const { t } = useTranslation()
   // The chain may still report status 'open' for a few minutes after the
   // deadline until the indexer flips it. Show a single "expired" badge in
@@ -257,19 +257,19 @@ function TenderCard({ it, dim }: { it: TenderSummary; dim?: boolean }) {
   const showOpenBadge = !expired && it.status === 'open'
   return (
     <Link
-      to={`/tenders/${it.id}`}
+      to={`/proposals/${it.id}`}
       className={`card card-hover block ${dim ? 'opacity-80 hover:opacity-100 transition-opacity' : ''}`}
     >
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           {showOpenBadge && (
             <span className="pill flex-shrink-0 bg-emerald-500/10 text-emerald-400">
-              {t('tender.status.open')}
+              {t('proposal.status.open')}
             </span>
           )}
           {showClosedBadge && (
             <span className="pill flex-shrink-0 bg-white/5 text-text-2">
-              {t('tender.status.closed')}
+              {t('proposal.status.closed')}
             </span>
           )}
           {showExpiredBadge && (

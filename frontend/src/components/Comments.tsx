@@ -10,19 +10,19 @@ import { CommentNode, buildCommentTree } from './CommentNode'
 export function Comments({
   ownerId,
   apiBase,
-  // Backwards-compat: existing TenderDetail call site passes tenderId.
-  tenderId,
+  // Backwards-compat: existing ProposalDetail call site passes proposalId.
+  proposalId,
 }: {
   /** Stable string used as the React Query cache key for these comments. */
   ownerId?: string
-  /** Base API path; defaults to /tenders/{ownerId}. Governance passes
+  /** Base API path; defaults to /proposal/{ownerId}. Governance passes
    *  '/governance/proposals/{pid}' so reads/writes target proposal comments. */
   apiBase?: string
-  /** @deprecated use ownerId + apiBase. Kept so existing TenderDetail keeps working. */
-  tenderId?: string
+  /** @deprecated use ownerId + apiBase. Kept so existing ProposalDetail keeps working. */
+  proposalId?: string
 }) {
-  const id = ownerId ?? tenderId ?? ''
-  const base = apiBase ?? `/tenders/${id}`
+  const id = ownerId ?? proposalId ?? ''
+  const base = apiBase ?? `/proposal/${id}`
   const { t, i18n } = useTranslation()
   const lng = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
   const { data: me } = useMe()
@@ -39,7 +39,7 @@ export function Comments({
 
   const tree = useMemo(() => buildCommentTree(comments || []), [comments])
 
-  // Telegram notifications link to /tenders/{id}#comment-{cid} (and likewise
+  // Telegram notifications link to /proposal/{id}#comment-{cid} (and likewise
   // for governance). Once the list is loaded, scroll the target into view and
   // flash a ring around it so the user can find the new reply. Re-run when
   // the hash changes (e.g. user clicks two different notifications) and when

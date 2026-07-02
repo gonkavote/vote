@@ -1,4 +1,4 @@
-"""One-shot: enqueue detect jobs for tenders/comments that have no source_lang.
+"""One-shot: enqueue detect jobs for proposals/comments that have no source_lang.
 
 Run after applying migrations 009 + 010 on a database that already had
 content. Idempotent: rows with non-empty `source_lang` are skipped.
@@ -26,15 +26,15 @@ from backend.translation_queue import enqueue_detect
 logger = logging.getLogger(__name__)
 
 
-async def _backfill_tenders(ch: CHClient) -> int:
+async def _backfill_proposals(ch: CHClient) -> int:
     rows: list[dict[str, Any]] = await ch.query_rows(
         """
-        SELECT id FROM gonka_vote.tenders FINAL
+        SELECT id FROM gonka_vote.proposals FINAL
         WHERE deleted_at IS NULL AND (source_lang = '' OR source_lang IS NULL)
         """
     )
     for r in rows:
-        await enqueue_detect(ch, "tender", r["id"])
+        await enqueue_detect(ch, "proposal", r["id"])
     return len(rows)
 
 
@@ -63,10 +63,10 @@ async def main() -> None:
     )
     await ch.connect()
 
-    n_tenders = await _backfill_tenders(ch)
+    n_proposals = await _backfill_proposals(ch)
     n_comments = await _backfill_comments(ch)
-    logger.info("done: enqueued detect for %d tender(s), %d comment(s)",
-                n_tenders, n_comments)
+    logger.info("done: enqueued detect for %d proposal(s), %d comment(s)",
+                n_proposals, n_comments)
 
 
 if __name__ == "__main__":

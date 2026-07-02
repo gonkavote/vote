@@ -44,7 +44,7 @@ export function GovernanceDetailPage() {
   })
   const { data: config } = useAppConfig()
 
-  if (isLoading) return <p className="text-text-2 max-w-[1400px] mx-auto px-5 py-12">{t('tender.loading')}</p>
+  if (isLoading) return <p className="text-text-2 max-w-[1400px] mx-auto px-5 py-12">{t('proposal.loading')}</p>
   if (error || !p) {
     return (
       <div className="max-w-[1400px] mx-auto px-5 py-12">
@@ -329,7 +329,7 @@ function DetailsTab({ p }: { p: GovProposalDetail }) {
              className="text-accent hover:underline break-all">{p.metadata_url}</a>
         </p>
       )}
-      {isLoading && <p className="text-text-2 text-sm">{t('tender.loading')}</p>}
+      {isLoading && <p className="text-text-2 text-sm">{t('proposal.loading')}</p>}
       {data && data.markdown && (
         <>
           <div className="flex items-center gap-2">
@@ -427,7 +427,7 @@ function VotesTab({ pid }: { pid: number }) {
     return arr
   }, [votes, sortKey, order])
 
-  if (isLoading) return <p className="text-text-2 text-sm">{t('tender.loading')}</p>
+  if (isLoading) return <p className="text-text-2 text-sm">{t('proposal.loading')}</p>
   if (!votes || votes.length === 0) {
     return <p className="text-text-2 text-sm">{t('governance.empty.noVotes')}</p>
   }
@@ -537,7 +537,7 @@ function DepositsTab({ pid }: { pid: number }) {
     return arr
   }, [data, sortKey, order])
 
-  if (isLoading) return <p className="text-text-2 text-sm">{t('tender.loading')}</p>
+  if (isLoading) return <p className="text-text-2 text-sm">{t('proposal.loading')}</p>
   if (!data || data.length === 0) {
     return <p className="text-text-2 text-sm">{t('governance.empty.noDeposits')}</p>
   }

@@ -1,8 +1,8 @@
 {
   "header": {
-    "tenders": "Tenders",
+    "proposals": "Proposals",
     "governance": "Governance",
-    "newTender": "+ New tender",
+    "newProposal": "+ New proposal",
     "signIn": "Sign in"
   },
   "lang": {
@@ -11,7 +11,7 @@
   },
   "footer": {
     "copyright": "© 2026 Gonka Vote",
-    "tagline": "Community-driven tender portal · indicative votes weighted by GNK balance · not affiliated with on-chain governance.",
+    "tagline": "Community-driven proposal portal · indicative votes weighted by GNK balance · not affiliated with on-chain governance.",
     "site": "gonka.ai",
     "wallet": "Wallet",
     "privacy": "Privacy",
@@ -22,12 +22,12 @@
       "badge": "Community-driven · GNK-weighted",
       "titleLine1": "What should Gonka",
       "titleLine2": "build next?",
-      "subtitle": "Propose a tender, discuss it, and signal what would be a fair payout from the <strong>community pool</strong> for implementing it. Grants are weighted by each voter's current GNK balance.",
-      "propose": "+ Propose a tender"
+      "subtitle": "Propose an idea, discuss it, and signal what would be a fair payout from the <strong>community pool</strong> for implementing it. Grants are weighted by each voter's current GNK balance.",
+      "propose": "+ Create a proposal"
     },
     "list": {
-      "title": "Tenders",
-      "search": "Search tenders…",
+      "title": "Proposals",
+      "search": "Search proposals…",
       "countOf": "({{shown}} of {{total}})",
       "count": "({{n}})"
     },
@@ -52,14 +52,14 @@
       "bid_asc": "Avg grant ↑"
     },
     "empty": {
-      "noneSignedIn": "No tenders yet.",
+      "noneSignedIn": "No proposals yet.",
       "beTheFirst": "Be the first to propose one →",
       "noneSignedOut": "Sign in to create one.",
-      "noMatch": "No tenders match"
+      "noMatch": "No proposals match"
     }
   },
-  "tender": {
-    "back": "← All tenders",
+  "proposal": {
+    "back": "← All proposals",
     "by": "by",
     "unknown": "unknown",
     "status": {
@@ -100,16 +100,16 @@
       "openTracker": "Open transaction in tracker"
     },
     "sidebar": {
-      "tenderId": "Tender ID",
+      "proposalId": "Proposal ID",
       "contract": "Contract"
     },
-    "notFound": "Tender not found.",
+    "notFound": "Proposal not found.",
     "back2": "← Back",
     "loading": "Loading…"
   },
   "cast": {
     "title": "Cast your vote",
-    "description": "How much GNK (whole numbers) should the implementer be paid from the community pool when this tender is delivered? Your vote signals a fair price — <strong>your own balance is never touched, nothing is locked or charged.</strong> You vote once per tender and can't change it later; the average across all grants is weighted by each voter's GNK balance.",
+    "description": "How much GNK (whole numbers) should the implementer be paid from the community pool when this proposal is delivered? Your vote signals a fair price — <strong>your own balance is never touched, nothing is locked or charged.</strong> You vote once per proposal and can't change it later; the average across all grants is weighted by each voter's GNK balance.",
     "yourBid": "Your grant",
     "invalid": "Enter a positive whole number of GNK.",
     "voteWc": "Vote with WalletConnect",
@@ -361,11 +361,11 @@
     "dislike": "Dislike",
     "signInToReact": "Sign in to react"
   },
-  "newTender": {
+  "newProposal": {
     "back": "Cancel",
-    "signInTitle": "Sign in to propose a tender",
-    "title": "Propose a tender",
-    "intro": "Tenders are indicative polls. The community votes with their GNK to signal priority. You can attach a wallet address in your profile to receive a reward if your tender is delivered.",
+    "signInTitle": "Sign in to create a proposal",
+    "title": "Create a proposal",
+    "intro": "Proposals are indicative polls. The community votes with their GNK to signal priority. You can attach a wallet address in your profile to receive a reward if your proposal is delivered.",
     "titleField": "Title",
     "titlePlaceholder": "e.g. Add WalletConnect support to the Gonka wallet",
     "summary": "Summary",
@@ -386,24 +386,24 @@
       "1m": "1 month",
       "3m": "3 months"
     },
-    "publish": "Publish tender",
+    "publish": "Publish",
     "publishing": "Creating…"
   },
   "me": {
     "viewPublic": "View public profile →",
     "rewardWalletLabel": "Reward wallet (optional)",
-    "rewardWalletHint": "If a tender you propose is delivered, the community can choose to send a reward in GNK to this address. We never use it for voting on your behalf.",
+    "rewardWalletHint": "If a proposal you create is delivered, the community can choose to send a reward in GNK to this address. We never use it for voting on your behalf.",
     "save": "Save",
     "saving": "Saving…",
     "saved": "✓ Saved",
     "signOut": "Sign out"
   },
   "profile": {
-    "back": "← All tenders",
+    "back": "← All proposals",
     "wallet": "Wallet",
-    "tendersTitle": "Tenders by this user",
-    "tendersCount": "({{n}})",
-    "noTenders": "No tenders yet.",
+    "proposalsTitle": "Proposals by this user",
+    "proposalsCount": "({{n}})",
+    "noProposals": "No proposals yet.",
     "notFound": "User not found.",
     "home": "← Home",
     "loading": "Loading…"

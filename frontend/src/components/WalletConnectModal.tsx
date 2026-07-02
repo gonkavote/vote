@@ -4,7 +4,7 @@
 // progress state, then a success or error state.
 //
 // Two flavours via the discriminated `op` prop:
-//   • op.kind = 'tender' — CosmWasm MsgExecuteContract on the vote contract.
+//   • op.kind = 'proposal' — CosmWasm MsgExecuteContract on the vote contract.
 //   • op.kind = 'gov'    — Cosmos governance MsgVote on a proposal.
 
 import { useEffect, useRef, useState } from 'react'
@@ -26,9 +26,9 @@ import type { SessionTypes } from '@walletconnect/types'
 
 export type WalletConnectOp =
   | {
-      kind: 'tender'
+      kind: 'proposal'
       contractAddress: string
-      tenderId: string
+      proposalId: string
       amountNgonka: string
       amountGnkLabel: string
     }
@@ -86,10 +86,10 @@ export function WalletConnectModal({ op, restUrl, onClose, onSuccess }: Props) {
         if (cancelledRef.current) return
         setStage({ kind: 'signing', account })
 
-        const result = op.kind === 'tender'
+        const result = op.kind === 'proposal'
           ? await castVote(session, account, {
               contractAddress: op.contractAddress,
-              tenderId: op.tenderId,
+              proposalId: op.proposalId,
               amountNgonka: op.amountNgonka,
               restUrl,
             })
@@ -156,7 +156,7 @@ export function WalletConnectModal({ op, restUrl, onClose, onSuccess }: Props) {
 
         <h2 className="text-lg font-semibold mb-1">{t('wc.title')}</h2>
         <p className="text-text-2 text-sm mb-5">
-          {op.kind === 'tender' ? (
+          {op.kind === 'proposal' ? (
             <>
               {t('wc.bid')}{' '}
               <span className="text-text font-semibold">{op.amountGnkLabel}</span>

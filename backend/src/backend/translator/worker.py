@@ -28,7 +28,7 @@ from backend.translator.prompts import (
     build_comment_prompt,
     build_gov_metadata_prompt,
     build_gov_proposal_prompt,
-    build_tender_prompt,
+    build_proposal_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -141,11 +141,11 @@ async def _mark_failed(ch: CHClient, job: dict[str, Any], err: str) -> None:
 # Per-kind processing
 # ----------------------------------------------------------------------------
 
-async def _load_tender_source(ch: CHClient, tid: UUID) -> Optional[dict[str, Any]]:
+async def _load_proposal_source(ch: CHClient, tid: UUID) -> Optional[dict[str, Any]]:
     return await ch.query_one(
         """
         SELECT id, title, summary, description, source_lang
-        FROM gonka_vote.tenders FINAL
+        FROM gonka_vote.proposals FINAL
         WHERE id = {id:UUID} AND deleted_at IS NULL
         """,
         {"id": str(tid)},
@@ -205,21 +205,21 @@ def _merge_into_json(existing_json_str: str, lang: str, value: str) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 
-async def _process_tender(ch: CHClient, job: dict[str, Any]) -> None:
+async def _process_proposal(ch: CHClient, job: dict[str, Any]) -> None:
     tid: UUID = job["entity_id"]
     target = job["target_lang"]
-    row = await _load_tender_source(ch, tid)
+    row = await _load_proposal_source(ch, tid)
     if not row:
         # Tender was soft-deleted; nothing to translate.
-        logger.info("tender %s missing or deleted, skipping", tid)
+        logger.info("proposal %s missing or deleted, skipping", tid)
         return
 
     sample = f"{row['title']} {row.get('summary') or ''} {row.get('description') or ''}"
     source_lang = await _resolve_source_lang(
-        ch, "tenders", tid, row.get("source_lang") or "", sample,
+        ch, "proposals", tid, row.get("source_lang") or "", sample,
     )
     if source_lang == target:
-        logger.info("tender %s source==target=%s, no translate needed", tid, target)
+        logger.info("proposal %s source==target=%s, no translate needed", tid, target)
         return
 
     user_payload = json.dumps({
@@ -227,7 +227,7 @@ async def _process_tender(ch: CHClient, job: dict[str, Any]) -> None:
         "summary": row.get("summary") or "",
         "description": row.get("description") or "",
     }, ensure_ascii=False)
-    system_prompt = build_tender_prompt(source_lang, target)
+    system_prompt = build_proposal_prompt(source_lang, target)
     result = await translate(system_prompt, user_payload)
 
     title_new = str(result.get("title", row["title"]))
@@ -235,11 +235,11 @@ async def _process_tender(ch: CHClient, job: dict[str, Any]) -> None:
     desc_new = str(result.get("description", row.get("description") or ""))
 
     await ch.insert(
-        "tender_translations",
-        ["tender_id", "target_lang", "title", "summary", "description", "updated_at"],
+        "proposal_translations",
+        ["proposal_id", "target_lang", "title", "summary", "description", "updated_at"],
         [[tid, target, title_new, summary_new, desc_new, datetime.now(timezone.utc)]],
     )
-    logger.info("translated tender %s %s→%s", tid, source_lang, target)
+    logger.info("translated proposal %s %s→%s", tid, source_lang, target)
 
 
 async def _process_comment(ch: CHClient, job: dict[str, Any]) -> None:
@@ -270,18 +270,18 @@ async def _process_comment(ch: CHClient, job: dict[str, Any]) -> None:
     logger.info("translated comment %s %s→%s", cid, source_lang, target)
 
 
-async def _process_detect_tender(ch: CHClient, job: dict[str, Any]) -> None:
+async def _process_detect_proposal(ch: CHClient, job: dict[str, Any]) -> None:
     tid: UUID = job["entity_id"]
-    row = await _load_tender_source(ch, tid)
+    row = await _load_proposal_source(ch, tid)
     if not row:
-        logger.info("detect: tender %s missing or deleted, skipping", tid)
+        logger.info("detect: proposal %s missing or deleted, skipping", tid)
         return
     sample = f"{row['title']} {row.get('summary') or ''} {row.get('description') or ''}"
     source_lang = await _resolve_source_lang(
-        ch, "tenders", tid, row.get("source_lang") or "", sample,
+        ch, "proposals", tid, row.get("source_lang") or "", sample,
     )
-    n = await enqueue_translations(ch, "tender", tid, source_lang)
-    logger.info("detect tender %s → source=%s, enqueued %d translation(s)",
+    n = await enqueue_translations(ch, "proposal", tid, source_lang)
+    logger.info("detect proposal %s → source=%s, enqueued %d translation(s)",
                 tid, source_lang, n)
 
 
@@ -463,12 +463,12 @@ async def _process_gov_metadata(ch: CHClient, job: dict[str, Any]) -> None:
 
 async def _process_one(ch: CHClient, job: dict[str, Any]) -> None:
     kind = job["kind"]
-    if kind == "tender":
-        await _process_tender(ch, job)
+    if kind == "proposal":
+        await _process_proposal(ch, job)
     elif kind == "comment":
         await _process_comment(ch, job)
-    elif kind == "detect_tender":
-        await _process_detect_tender(ch, job)
+    elif kind == "detect_proposal":
+        await _process_detect_proposal(ch, job)
     elif kind == "detect_comment":
         await _process_detect_comment(ch, job)
     elif kind == "gov_proposal":

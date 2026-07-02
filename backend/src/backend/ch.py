@@ -1,6 +1,6 @@
 """Async ClickHouse client — adapted from gonka tracker/backend/src/backend/ch.py.
 
-Backend writes (tenders, comments, users) and reads (everything). Indexer also
+Backend writes (proposals, comments, users) and reads (everything). Indexer also
 writes (votes, vote_snapshots) but uses the native protocol on a different port.
 """
 from __future__ import annotations

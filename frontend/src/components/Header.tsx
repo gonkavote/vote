@@ -58,8 +58,8 @@ export function Header() {
             </span>
           )}
         </Link>
-        <Link to="/tenders/new" className="hidden sm:inline-flex btn-ghost">
-          {t('header.newTender')}
+        <Link to="/proposal/new" className="hidden sm:inline-flex btn-ghost">
+          {t('header.newProposal')}
         </Link>
         {me ? (
           <Link to="/me" className="btn-ghost flex items-center gap-2">

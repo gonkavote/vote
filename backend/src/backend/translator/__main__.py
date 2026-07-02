@@ -1,7 +1,7 @@
 """Entrypoint: `python -m backend.translator`.
 
 Run as a separate Docker service (gonka-vote-translator). Polls the
-translation_jobs table and pushes finished translations into tenders.*_t
+translation_jobs table and pushes finished translations into proposals.*_t
 or comments.body_t.
 """
 from __future__ import annotations

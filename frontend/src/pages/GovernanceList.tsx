@@ -121,7 +121,7 @@ export function GovernanceListPage() {
       </div>
 
       {isLoading && (
-        <p className="text-text-2 py-8">{t('tender.loading')}</p>
+        <p className="text-text-2 py-8">{t('proposal.loading')}</p>
       )}
       {error && (
         <p className="text-rose-400 py-8">{(error as Error).message}</p>

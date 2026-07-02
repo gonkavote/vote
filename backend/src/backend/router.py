@@ -26,11 +26,11 @@ from backend.lang_detect import supported_languages
 from backend.models import (
     CommentCreate,
     CommentOut,
+    ProposalCreate,
+    ProposalDetail,
+    ProposalSummary,
+    ProposalTally,
     ReactionUpsert,
-    TenderCreate,
-    TenderDetail,
-    TenderSummary,
-    TenderTally,
     UserOut,
     UserPublicProfile,
     UserUpdate,
@@ -184,8 +184,15 @@ async def update_me(payload: UserUpdate, user: dict = Depends(current_user)) -> 
 
 
 # ----------------------------------------------------------------------------
-# Tenders
+# Proposals
 # ----------------------------------------------------------------------------
+#
+# Every endpoint below is registered under BOTH /proposals and /tenders paths
+# so that external integrations that still hit /api/tenders/* keep working.
+# The legacy /tenders alias is hidden from OpenAPI docs.
+#
+# On-chain wire format still uses `tender_id` for votes — this backend does
+# not touch that; the smart-contract-facing code lives in the indexer.
 
 # --- shared SQL fragments -----------------------------------------------------
 # Community weight = balance + collateral + vesting (legacy weight_ngonka column
@@ -204,24 +211,25 @@ _TALLY_AGG_COLS = """
     max(refreshed_at)                                                    AS refreshed_at
 """
 
-# Per-tender tally aggregate (single row).
+# Per-proposal tally aggregate (single row).
 _TALLY_SQL = f"""
 SELECT
     {_TALLY_AGG_COLS.replace('AS voter_count', 'AS voter_count').strip()}
 FROM gonka_vote.vote_snapshots FINAL
-WHERE tender_id = {{tid:String}}
+WHERE proposal_id = {{pid:String}}
 """
 
 
-@router.get("/tenders")
-async def list_tenders(lang: Optional[str] = None) -> list[TenderSummary]:
+@router.get("/proposals")
+@router.get("/tenders", include_in_schema=False)
+async def list_proposals(lang: Optional[str] = None) -> list[ProposalSummary]:
     ch = _ensure_ch()
     target_lang = (lang or "").strip().lower()
     rows = await ch.query_rows(
         """
-        WITH tender_tallies AS (
+        WITH proposal_tallies AS (
             SELECT
-                tender_id,
+                proposal_id,
                 count()                                          AS voter_count,
                 sum(amount_ngonka)                               AS sum_bid,
                 sum(weight_ngonka)                               AS community_w,
@@ -231,19 +239,19 @@ async def list_tenders(lang: Optional[str] = None) -> list[TenderSummary]:
                           toUInt256(sum(weight_ngonka))))        AS weighted_avg,
                 max(refreshed_at)                                AS refreshed_at
             FROM gonka_vote.vote_snapshots FINAL
-            GROUP BY tender_id
+            GROUP BY proposal_id
         ),
-        tender_jobs AS (
-            -- Job status per tender for the requested target_lang.
+        proposal_jobs AS (
+            -- Job status per proposal for the requested target_lang.
             SELECT entity_id, status
             FROM gonka_vote.translation_jobs FINAL
-            WHERE kind = 'tender' AND target_lang = {lang:String}
+            WHERE kind = 'proposal' AND target_lang = {lang:String}
         ),
         comment_counts AS (
-            SELECT tender_id, count() AS cnt
+            SELECT entity_id, count() AS cnt
             FROM gonka_vote.comments
             WHERE deleted_at IS NULL
-            GROUP BY tender_id
+            GROUP BY entity_id
         )
         SELECT
             t.id            AS id,
@@ -266,13 +274,13 @@ async def list_tenders(lang: Optional[str] = None) -> list[TenderSummary]:
             tt.refreshed_at                          AS refreshed_at,
             COALESCE(tj.status, '')                  AS job_status,
             COALESCE(cc.cnt, 0)                      AS comment_count
-        FROM gonka_vote.tenders AS t FINAL
+        FROM gonka_vote.proposals AS t FINAL
         LEFT JOIN gonka_vote.users  AS u  FINAL ON u.email = t.creator_email
-        LEFT JOIN tender_tallies    AS tt        ON tt.tender_id = toString(t.id)
-        LEFT JOIN tender_jobs       AS tj        ON tj.entity_id = t.id
-        LEFT JOIN comment_counts    AS cc        ON cc.tender_id = t.id
-        LEFT JOIN gonka_vote.tender_translations AS ttx FINAL
-                  ON ttx.tender_id = t.id AND ttx.target_lang = {lang:String}
+        LEFT JOIN proposal_tallies  AS tt        ON tt.proposal_id = toString(t.id)
+        LEFT JOIN proposal_jobs     AS tj        ON tj.entity_id = t.id
+        LEFT JOIN comment_counts    AS cc        ON cc.entity_id = t.id
+        LEFT JOIN gonka_vote.proposal_translations AS ttx FINAL
+                  ON ttx.proposal_id = t.id AND ttx.target_lang = {lang:String}
         WHERE t.deleted_at IS NULL
         ORDER BY t.created_at DESC
         """,
@@ -281,11 +289,12 @@ async def list_tenders(lang: Optional[str] = None) -> list[TenderSummary]:
     return [_row_to_summary(r, target_lang) for r in rows]
 
 
-@router.post("/tenders", status_code=201)
-async def create_tender(
-    payload: TenderCreate,
+@router.post("/proposals", status_code=201)
+@router.post("/tenders", status_code=201, include_in_schema=False)
+async def create_proposal(
+    payload: ProposalCreate,
     user: dict = Depends(current_user),
-) -> TenderSummary:
+) -> ProposalSummary:
     if payload.closes_at is None:
         raise HTTPException(422, "closes_at is required")
     closes_at = payload.closes_at
@@ -301,11 +310,11 @@ async def create_tender(
     ch = _ensure_ch()
     new_id = uuid4()
     # We don't try to detect the language here — that's a network call to
-    # Gemini and we want create_tender to stay fast (<500ms p99). Insert with
+    # Gemini and we want create_proposal to stay fast (<500ms p99). Insert with
     # source_lang='', enqueue a single 'detect' job; the worker will resolve
     # source_lang and then enqueue the per-language translation jobs.
     await ch.insert(
-        "tenders",
+        "proposals",
         ["id", "title", "summary", "description", "creator_email", "creator_wallet",
          "status", "created_at", "closes_at", "creator_uid", "source_lang"],
         [[
@@ -323,10 +332,10 @@ async def create_tender(
         ]],
     )
     try:
-        await enqueue_detect(ch, "tender", new_id)
+        await enqueue_detect(ch, "proposal", new_id)
     except Exception as e:
-        logger.warning("enqueue_detect(tender) failed for %s: %s", new_id, e)
-    return TenderSummary(
+        logger.warning("enqueue_detect(proposal) failed for %s: %s", new_id, e)
+    return ProposalSummary(
         id=new_id,
         title=payload.title,
         summary=payload.summary,
@@ -336,14 +345,15 @@ async def create_tender(
         status="open",
         created_at=now,
         closes_at=closes_at,
-        tally=TenderTally(),
+        tally=ProposalTally(),
         source_lang="",
         translation_status="pending" if len(supported_languages()) > 1 else "ready",
     )
 
 
-@router.get("/tenders/{tender_id}")
-async def get_tender(tender_id: UUID, lang: Optional[str] = None) -> TenderDetail:
+@router.get("/proposals/{proposal_id}")
+@router.get("/tenders/{proposal_id}", include_in_schema=False)
+async def get_proposal(proposal_id: UUID, lang: Optional[str] = None) -> ProposalDetail:
     ch = _ensure_ch()
     target_lang = (lang or "").strip().lower()
     t = await ch.query_one(
@@ -365,21 +375,21 @@ async def get_tender(tender_id: UUID, lang: Optional[str] = None) -> TenderDetai
             t.created_at      AS created_at,
             t.closes_at       AS closes_at,
             COALESCE(tj.status, '') AS job_status
-        FROM gonka_vote.tenders AS t FINAL
+        FROM gonka_vote.proposals AS t FINAL
         LEFT JOIN gonka_vote.users AS u FINAL ON u.email = t.creator_email
         LEFT JOIN gonka_vote.translation_jobs AS tj FINAL
-                  ON tj.kind = 'tender' AND tj.entity_id = t.id AND tj.target_lang = {lang:String}
-        LEFT JOIN gonka_vote.tender_translations AS ttx FINAL
-                  ON ttx.tender_id = t.id AND ttx.target_lang = {lang:String}
+                  ON tj.kind = 'proposal' AND tj.entity_id = t.id AND tj.target_lang = {lang:String}
+        LEFT JOIN gonka_vote.proposal_translations AS ttx FINAL
+                  ON ttx.proposal_id = t.id AND ttx.target_lang = {lang:String}
         WHERE t.id = {id:UUID} AND t.deleted_at IS NULL
         """,
-        {"id": str(tender_id), "lang": target_lang},
+        {"id": str(proposal_id), "lang": target_lang},
     )
     if not t:
-        raise HTTPException(404, "tender not found")
+        raise HTTPException(404, "proposal not found")
 
-    tally_row = await ch.query_one(_TALLY_SQL, {"tid": str(tender_id)})
-    tally = _row_to_tally(tally_row) if tally_row else TenderTally()
+    tally_row = await ch.query_one(_TALLY_SQL, {"pid": str(proposal_id)})
+    tally = _row_to_tally(tally_row) if tally_row else ProposalTally()
 
     voters = await ch.query_rows(
         """
@@ -390,16 +400,16 @@ async def get_tender(tender_id: UUID, lang: Optional[str] = None) -> TenderDetai
                nullIf(tx_hash, '')      AS tx_hash,
                voted_at                 AS voted_at
         FROM gonka_vote.vote_snapshots FINAL
-        WHERE tender_id = {id:String}
+        WHERE proposal_id = {id:String}
         ORDER BY weight_ngonka DESC, amount_ngonka DESC
         """,
-        {"id": str(tender_id)},
+        {"id": str(proposal_id)},
     )
 
     comment_count = await ch.query_scalar(
         "SELECT count() FROM gonka_vote.comments "
-        "WHERE tender_id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(tender_id)},
+        "WHERE entity_id = {id:UUID} AND deleted_at IS NULL",
+        {"id": str(proposal_id)},
     )
 
     source_lang = (t.get("source_lang") or "")
@@ -414,7 +424,7 @@ async def get_tender(tender_id: UUID, lang: Optional[str] = None) -> TenderDetai
         t["description"], t.get("description_t") or "", source_lang, target_lang, job_status,
     )
     is_translated = t_is_t or s_is_t or d_is_t
-    return TenderDetail(
+    return ProposalDetail(
         id=t["id"],
         title=title_show,
         summary=summary_show,
@@ -438,27 +448,28 @@ async def get_tender(tender_id: UUID, lang: Optional[str] = None) -> TenderDetai
     )
 
 
-@router.post("/tenders/{tender_id}/close")
-async def close_tender(tender_id: UUID, user: dict = Depends(current_user)):
+@router.post("/proposals/{proposal_id}/close")
+@router.post("/tenders/{proposal_id}/close", include_in_schema=False)
+async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
     ch = _ensure_ch()
     t = await ch.query_one(
         "SELECT creator_email, status, title, summary, description, created_at, "
         "closes_at, creator_wallet, creator_uid "
-        "FROM gonka_vote.tenders FINAL "
+        "FROM gonka_vote.proposals FINAL "
         "WHERE id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(tender_id)},
+        {"id": str(proposal_id)},
     )
     if not t:
-        raise HTTPException(404, "tender not found")
+        raise HTTPException(404, "proposal not found")
     if t["creator_email"] != user["email"]:
         raise HTTPException(403, "only the creator can close")
 
     await ch.insert(
-        "tenders",
+        "proposals",
         ["id", "title", "summary", "description", "creator_email", "creator_wallet",
          "status", "created_at", "closes_at", "creator_uid"],
         [[
-            tender_id,
+            proposal_id,
             t["title"],
             t.get("summary") or "",
             t["description"],
@@ -473,31 +484,32 @@ async def close_tender(tender_id: UUID, user: dict = Depends(current_user)):
     return {"ok": True}
 
 
-@router.delete("/tenders/{tender_id}")
-async def delete_tender(tender_id: UUID, admin: dict = Depends(current_admin)):
-    """Admin-only soft delete. Cascades to all comments on this tender."""
+@router.delete("/proposals/{proposal_id}")
+@router.delete("/tenders/{proposal_id}", include_in_schema=False)
+async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin)):
+    """Admin-only soft delete. Cascades to all comments on this proposal."""
     ch = _ensure_ch()
     t = await ch.query_one(
         "SELECT id, title, summary, description, creator_email, creator_wallet, "
         "status, created_at, closes_at, creator_uid "
-        "FROM gonka_vote.tenders FINAL "
+        "FROM gonka_vote.proposals FINAL "
         "WHERE id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(tender_id)},
+        {"id": str(proposal_id)},
     )
     if not t:
-        raise HTTPException(404, "tender not found")
+        raise HTTPException(404, "proposal not found")
 
     now = datetime.now(timezone.utc)
 
-    # Soft-delete the tender via ReplacingMergeTree(updated_at) — we re-insert
+    # Soft-delete the proposal via ReplacingMergeTree(updated_at) — we re-insert
     # the full row with deleted_at populated.
     await ch.insert(
-        "tenders",
+        "proposals",
         ["id", "title", "summary", "description", "creator_email", "creator_wallet",
          "status", "created_at", "closes_at", "creator_uid",
          "deleted_at", "deleted_by_email"],
         [[
-            tender_id,
+            proposal_id,
             t["title"],
             t.get("summary") or "",
             t["description"],
@@ -517,8 +529,8 @@ async def delete_tender(tender_id: UUID, admin: dict = Depends(current_admin)):
     await ch.command(
         "ALTER TABLE gonka_vote.comments "
         "UPDATE deleted_at = now64(3), deleted_by_email = {by:String} "
-        "WHERE tender_id = {tid:UUID} AND deleted_at IS NULL",
-        {"by": admin["email"], "tid": str(tender_id)},
+        "WHERE entity_id = {tid:UUID} AND deleted_at IS NULL",
+        {"by": admin["email"], "tid": str(proposal_id)},
     )
 
     return {"ok": True}
@@ -528,9 +540,10 @@ async def delete_tender(tender_id: UUID, admin: dict = Depends(current_admin)):
 # Comments
 # ----------------------------------------------------------------------------
 
-@router.get("/tenders/{tender_id}/comments")
+@router.get("/proposals/{proposal_id}/comments")
+@router.get("/tenders/{proposal_id}/comments", include_in_schema=False)
 async def list_comments(
-    tender_id: UUID,
+    proposal_id: UUID,
     request: Request,
     lang: Optional[str] = None,
 ) -> list[CommentOut]:
@@ -563,7 +576,7 @@ async def list_comments(
                   ON tj.kind = 'comment' AND tj.entity_id = c.id AND tj.target_lang = {lang:String}
         LEFT JOIN gonka_vote.comment_translations AS ct FINAL
                   ON ct.comment_id = c.id AND ct.target_lang = {lang:String}
-        WHERE c.tender_id = {id:UUID} AND c.deleted_at IS NULL
+        WHERE c.entity_id = {id:UUID} AND c.deleted_at IS NULL
         GROUP BY c.id, c.parent_comment_id, c.author_uid, c.author_name,
                  u.uid, u.name, u.image, c.body, c.source_lang, ct.body,
                  c.created_at, tj.status
@@ -572,7 +585,7 @@ async def list_comments(
                   - toInt64(countIf(r.reaction_type = 'dislike'))) DESC,
                  c.created_at ASC
         """,
-        {"id": str(tender_id), "me_uid": me_uid, "lang": target_lang},
+        {"id": str(proposal_id), "me_uid": me_uid, "lang": target_lang},
     )
     out: list[CommentOut] = []
     for r in rows:
@@ -600,30 +613,31 @@ async def list_comments(
     return out
 
 
-@router.post("/tenders/{tender_id}/comments", status_code=201)
+@router.post("/proposals/{proposal_id}/comments", status_code=201)
+@router.post("/tenders/{proposal_id}/comments", status_code=201, include_in_schema=False)
 async def add_comment(
-    tender_id: UUID,
+    proposal_id: UUID,
     payload: CommentCreate,
     user: dict = Depends(current_user),
 ) -> CommentOut:
     ch = _ensure_ch()
     exists = await ch.query_scalar(
-        "SELECT 1 FROM gonka_vote.tenders FINAL WHERE id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(tender_id)},
+        "SELECT 1 FROM gonka_vote.proposals FINAL WHERE id = {id:UUID} AND deleted_at IS NULL",
+        {"id": str(proposal_id)},
     )
     if not exists:
-        raise HTTPException(404, "tender not found")
+        raise HTTPException(404, "proposal not found")
 
     if payload.parent_comment_id is not None:
-        parent_tender = await ch.query_scalar(
-            "SELECT tender_id FROM gonka_vote.comments "
+        parent_entity = await ch.query_scalar(
+            "SELECT entity_id FROM gonka_vote.comments "
             "WHERE id = {pid:UUID} AND deleted_at IS NULL LIMIT 1",
             {"pid": str(payload.parent_comment_id)},
         )
-        if parent_tender is None:
+        if parent_entity is None:
             raise HTTPException(404, "parent comment not found")
-        if str(parent_tender) != str(tender_id):
-            raise HTTPException(400, "parent comment belongs to a different tender")
+        if str(parent_entity) != str(proposal_id):
+            raise HTTPException(400, "parent comment belongs to a different proposal")
 
     cid = uuid4()
     now = datetime.now(timezone.utc)
@@ -631,9 +645,9 @@ async def add_comment(
     # (see worker._process_detect). Keeps add_comment fast.
     await ch.insert(
         "comments",
-        ["id", "tender_id", "author_email", "author_name", "body", "created_at",
+        ["id", "entity_id", "author_email", "author_name", "body", "created_at",
          "parent_comment_id", "author_uid", "source_lang"],
-        [[cid, tender_id, user["email"], user.get("name"), payload.body, now,
+        [[cid, proposal_id, user["email"], user.get("name"), payload.body, now,
           payload.parent_comment_id, user["uid"], ""]],
     )
     try:
@@ -729,13 +743,13 @@ async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProf
     if not u:
         raise HTTPException(404, "user not found")
 
-    # Tenders: match by either creator_uid (new rows) or creator_email (old rows
+    # Proposals: match by either creator_uid (new rows) or creator_email (old rows
     # that pre-date the uid backfill on the per-row column).
     rows = await ch.query_rows(
         """
-        WITH tender_tallies AS (
+        WITH proposal_tallies AS (
             SELECT
-                tender_id,
+                proposal_id,
                 count()                                          AS voter_count,
                 sum(amount_ngonka)                               AS sum_bid,
                 sum(weight_ngonka)                               AS community_w,
@@ -745,7 +759,7 @@ async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProf
                           toUInt256(sum(weight_ngonka))))        AS weighted_avg,
                 max(refreshed_at)                                AS refreshed_at
             FROM gonka_vote.vote_snapshots FINAL
-            GROUP BY tender_id
+            GROUP BY proposal_id
         )
         SELECT
             t.id            AS id,
@@ -766,10 +780,10 @@ async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProf
             toString(COALESCE(tt.hosts_w, 0))        AS hosts_w,
             toString(COALESCE(tt.weighted_avg, 0))   AS weighted_avg,
             tt.refreshed_at                          AS refreshed_at
-        FROM gonka_vote.tenders AS t FINAL
-        LEFT JOIN tender_tallies AS tt ON tt.tender_id = toString(t.id)
-        LEFT JOIN gonka_vote.tender_translations AS ttx FINAL
-                  ON ttx.tender_id = t.id AND ttx.target_lang = {lang:String}
+        FROM gonka_vote.proposals AS t FINAL
+        LEFT JOIN proposal_tallies AS tt ON tt.proposal_id = toString(t.id)
+        LEFT JOIN gonka_vote.proposal_translations AS ttx FINAL
+                  ON ttx.proposal_id = t.id AND ttx.target_lang = {lang:String}
         WHERE t.deleted_at IS NULL
           AND (t.creator_email = {email:String} OR t.creator_uid = {uid:String})
         ORDER BY t.created_at DESC
@@ -787,7 +801,7 @@ async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProf
         name=u.get("name"),
         image=u.get("image"),
         wallet_address=u.get("wallet_address"),
-        tenders=[_row_to_summary(r, target_lang) for r in rows],
+        proposals=[_row_to_summary(r, target_lang) for r in rows],
     )
 
 
@@ -822,7 +836,7 @@ def _pick_translation(
     return original, False, "ready"
 
 
-def _row_to_summary(r: dict, target_lang: str = "") -> TenderSummary:
+def _row_to_summary(r: dict, target_lang: str = "") -> ProposalSummary:
     creator_image = r.get("creator_image")
     source_lang = (r.get("source_lang") or "")
     title_show, title_is_t, t_status = _pick_translation(
@@ -834,7 +848,7 @@ def _row_to_summary(r: dict, target_lang: str = "") -> TenderSummary:
         r.get("job_status") or "",
     )
     is_translated = title_is_t or summary_is_t
-    return TenderSummary(
+    return ProposalSummary(
         id=r["id"],
         title=title_show,
         summary=summary_show,
@@ -850,7 +864,7 @@ def _row_to_summary(r: dict, target_lang: str = "") -> TenderSummary:
         original_title=r["title"] if is_translated else None,
         original_summary=(r.get("summary") or "") if is_translated else None,
         translation_status=t_status,
-        tally=TenderTally(
+        tally=ProposalTally(
             voter_count=int(r["voter_count"] or 0),
             sum_bid_ngonka=str(r["sum_bid"] or "0"),
             community_weight_ngonka=str(r["community_w"] or "0"),
@@ -861,8 +875,8 @@ def _row_to_summary(r: dict, target_lang: str = "") -> TenderSummary:
     )
 
 
-def _row_to_tally(r: dict) -> TenderTally:
-    return TenderTally(
+def _row_to_tally(r: dict) -> ProposalTally:
+    return ProposalTally(
         voter_count=int(r["voter_count"] or 0),
         sum_bid_ngonka=str(r["sum_bid"] or "0"),
         community_weight_ngonka=str(r["community_w"] or "0"),

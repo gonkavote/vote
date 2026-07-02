@@ -22,8 +22,8 @@ function defaultGnkFromAvg(avgNgonka: string | undefined): string {
   return wholeGnk > 0n ? wholeGnk.toString() : FALLBACK_DEFAULT_GNK
 }
 
-export function HowToVote({ tenderId, config, disabled, defaultBidNgonka }: {
-  tenderId: string
+export function HowToVote({ proposalId, config, disabled, defaultBidNgonka }: {
+  proposalId: string
   config: Config | undefined
   disabled?: boolean
   defaultBidNgonka?: string
@@ -51,11 +51,11 @@ export function HowToVote({ tenderId, config, disabled, defaultBidNgonka }: {
 
   // Single-line form for clipboard (paste-and-run in any shell, no zsh
   // brace-expansion gotchas).
-  const cmd = `./inferenced tx wasm execute ${config.contract_address} '{"vote":{"tender_id":"${tenderId}","amount":"${ngonka}"}}' --from <your-key> --chain-id ${config.chain_id} --keyring-backend file --node ${config.rpc_url}/ -y`
+  const cmd = `./inferenced tx wasm execute ${config.contract_address} '{"vote":{"tender_id":"${proposalId}","amount":"${ngonka}"}}' --from <your-key> --chain-id ${config.chain_id} --keyring-backend file --node ${config.rpc_url}/ -y`
 
   // Pretty multiline form for display only — easier to read in the card.
   const cmdPretty = `./inferenced tx wasm execute ${config.contract_address} \\
-  '{"vote":{"tender_id":"${tenderId}","amount":"${ngonka}"}}' \\
+  '{"vote":{"tender_id":"${proposalId}","amount":"${ngonka}"}}' \\
   --from <your-key> --chain-id ${config.chain_id} \\
   --keyring-backend file \\
   --node ${config.rpc_url}/ -y`
@@ -122,9 +122,9 @@ export function HowToVote({ tenderId, config, disabled, defaultBidNgonka }: {
       {wcOpen && (
         <WalletConnectModal
           op={{
-            kind: 'tender',
+            kind: 'proposal',
             contractAddress: config.contract_address,
-            tenderId,
+            proposalId,
             amountNgonka: ngonka,
             amountGnkLabel: `${formattedGnk} GNK`,
           }}
@@ -133,7 +133,7 @@ export function HowToVote({ tenderId, config, disabled, defaultBidNgonka }: {
           onSuccess={() => {
             // Invalidate so the voters list refetches once the indexer picks
             // up the on-chain vote (next snapshot tick — within 60s).
-            qc.invalidateQueries({ queryKey: ['tender', tenderId] })
+            qc.invalidateQueries({ queryKey: ['proposal', proposalId] })
           }}
         />
       )}

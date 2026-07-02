@@ -29,7 +29,7 @@ from backend.governance.models import (
     normalize_status,
 )
 from backend.models import CommentCreate, CommentOut
-from backend.router import _pick_translation  # reuse the same logic as tenders
+from backend.router import _pick_translation  # reuse the same logic as proposals
 from backend.settings import settings
 from backend.translation_queue import enqueue_detect
 from backend.notifications import enqueue_comment_notifications
@@ -541,10 +541,10 @@ async def get_params() -> GovParams:
 
 
 # ----------------------------------------------------------------------------
-# Comments — proposal-scoped, share the comments table with tenders.
+# Comments — proposal-scoped, share the comments table with community proposals.
 #
 # We encode `proposal_id` into a fixed UUID so the existing comments schema
-# (which keys by tender_id UUID) keeps working without a migration. The
+# (which keys by entity_id UUID) keeps working without a migration. The
 # encoding is the same one used by translation_jobs for governance entities.
 # ----------------------------------------------------------------------------
 
@@ -588,7 +588,7 @@ async def list_proposal_comments(
                   ON tj.kind = 'comment' AND tj.entity_id = c.id AND tj.target_lang = {lang:String}
         LEFT JOIN gonka_vote.comment_translations AS ct FINAL
                   ON ct.comment_id = c.id AND ct.target_lang = {lang:String}
-        WHERE c.tender_id = {id:UUID} AND c.deleted_at IS NULL
+        WHERE c.entity_id = {id:UUID} AND c.deleted_at IS NULL
         GROUP BY c.id, c.parent_comment_id, c.author_uid, c.author_name,
                  u.uid, u.name, u.image, c.body, c.source_lang, ct.body,
                  c.created_at, tj.status
@@ -646,7 +646,7 @@ async def add_proposal_comment(
     owner = _proposal_owner_uuid(proposal_id)
     if payload.parent_comment_id is not None:
         parent_owner = await ch.query_scalar(
-            "SELECT tender_id FROM gonka_vote.comments "
+            "SELECT entity_id FROM gonka_vote.comments "
             "WHERE id = {pid:UUID} AND deleted_at IS NULL LIMIT 1",
             {"pid": str(payload.parent_comment_id)},
         )
@@ -659,7 +659,7 @@ async def add_proposal_comment(
     now = datetime.now(timezone.utc)
     await ch.insert(
         "comments",
-        ["id", "tender_id", "author_email", "author_name", "body", "created_at",
+        ["id", "entity_id", "author_email", "author_name", "body", "created_at",
          "parent_comment_id", "author_uid", "source_lang"],
         [[cid, owner, user["email"], user.get("name"), payload.body, now,
           payload.parent_comment_id, user["uid"], ""]],

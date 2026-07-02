@@ -1,4 +1,4 @@
-"""System prompts for tender + comment translation.
+"""System prompts for proposal + comment translation.
 
 Why JSON-in / JSON-out:
 - Atomic: one network call returns all fields together.
@@ -25,10 +25,10 @@ def _name(code: str) -> str:
     return LANG_NAMES.get(code, code.upper())
 
 
-def build_tender_prompt(source_lang: str, target_lang: str) -> str:
+def build_proposal_prompt(source_lang: str, target_lang: str) -> str:
     src, dst = _name(source_lang), _name(target_lang)
     return f"""You are a professional translator for Gonka Vote, a community
-governance website where users propose technical tenders backed by GNK token.
+governance website where users propose technical proposals backed by GNK token.
 
 TASK
 Translate the JSON object the user sends from {src} to {dst}. The input has
@@ -141,7 +141,7 @@ Do NOT wrap your response in code fences. Do NOT add commentary.
 CRITICAL RULES:
 
 1. PRESERVE Markdown if it appears in summary or failed_reason — same rules
-   as for tender descriptions: headings, bold, italic, lists, inline code,
+   as for proposal descriptions: headings, bold, italic, lists, inline code,
    fenced code blocks, links [text](url), blockquotes, tables, line breaks.
    Translate only the natural-language text; never alter syntax characters.
 

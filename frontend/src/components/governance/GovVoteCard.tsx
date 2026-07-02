@@ -1,6 +1,6 @@
 // In-sidebar voting card for a governance proposal: pick one of four options,
 // hand off to WalletConnect, fall back to a CLI command. Mirrors the look of
-// HowToVote (tender voting) but uses cosmos.gov.v1beta1.MsgVote instead of a
+// HowToVote (proposal voting) but uses cosmos.gov.v1beta1.MsgVote instead of a
 // CosmWasm contract call.
 
 import { useState } from 'react'

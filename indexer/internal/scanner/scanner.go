@@ -129,13 +129,16 @@ func (s *Scanner) parseVoteMsg(raw json.RawMessage, txHash string, height uint64
 		return clickhouse.VoteRow{}, false
 	}
 	var vote struct {
-		TenderID string `json:"tender_id"`
-		Amount   string `json:"amount"` // Uint128 serializes as string
+		// DO NOT rename `tender_id` — this JSON tag matches the on-chain
+		// CosmWasm contract wire format. The Go field name is renamed but
+		// the tag stays for wire compatibility.
+		ProposalID string `json:"tender_id"`
+		Amount     string `json:"amount"` // Uint128 serializes as string
 	}
 	if err := json.Unmarshal(voteRaw, &vote); err != nil {
 		return clickhouse.VoteRow{}, false
 	}
-	if vote.TenderID == "" || vote.Amount == "" {
+	if vote.ProposalID == "" || vote.Amount == "" {
 		return clickhouse.VoteRow{}, false
 	}
 	amt, ok := new(big.Int).SetString(vote.Amount, 10)
@@ -144,7 +147,7 @@ func (s *Scanner) parseVoteMsg(raw json.RawMessage, txHash string, height uint64
 	}
 
 	return clickhouse.VoteRow{
-		TenderID:     vote.TenderID,
+		ProposalID:     vote.ProposalID,
 		Voter:        m.Sender,
 		AmountNgonka: amt,
 		Height:       height,

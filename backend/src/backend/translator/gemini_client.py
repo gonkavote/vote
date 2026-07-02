@@ -65,7 +65,7 @@ async def detect_lang_via_ai(text: str, supported: list[str]) -> Optional[str]:
 
     To save tokens we feed only the first ~10 words; that's plenty for
     statistical disambiguation and avoids paying for thousands of tokens
-    on long tender descriptions.
+    on long proposal descriptions.
 
     Returns a 2-letter code from `supported` or None if the cascade failed
     or the model picked a language we don't ship UI for.

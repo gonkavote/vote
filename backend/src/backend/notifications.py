@@ -58,8 +58,8 @@ async def enqueue_comment_notifications(ch: CHClient, comment_id: UUID) -> None:
 
     Recipients:
       * parent_comment.author        — if there is a parent (a reply)
-      * tender.creator               — only for top-level comments on tenders
-                                       (gov proposals have no site-side owner)
+      * proposal.creator             — only for top-level comments on community
+                                       proposals (gov proposals have no site-side owner)
     Skipped if:
       * recipient == comment author       (self-notify)
       * recipient is a Google user        (no Telegram chat id)
@@ -70,13 +70,13 @@ async def enqueue_comment_notifications(ch: CHClient, comment_id: UUID) -> None:
             """
             SELECT
                 c.author_email                AS author_email,
-                c.tender_id                   AS tender_id,
+                c.entity_id                   AS entity_id,
                 c.parent_comment_id           AS parent_comment_id,
-                t.creator_email               AS tender_author,
+                t.creator_email               AS proposal_author,
                 pc.author_email               AS parent_author
             FROM gonka_vote.comments AS c
-            LEFT JOIN gonka_vote.tenders AS t FINAL
-                   ON t.id = c.tender_id
+            LEFT JOIN gonka_vote.proposals AS t FINAL
+                   ON t.id = c.entity_id
             LEFT JOIN gonka_vote.comments AS pc
                    ON pc.id = c.parent_comment_id AND pc.deleted_at IS NULL
             WHERE c.id = {cid:UUID}
@@ -87,12 +87,12 @@ async def enqueue_comment_notifications(ch: CHClient, comment_id: UUID) -> None:
         if not row:
             return
 
-        tender_uuid_str = str(row["tender_id"])
-        pid = proposal_id_from_owner_uuid(tender_uuid_str)
+        entity_uuid_str = str(row["entity_id"])
+        pid = proposal_id_from_owner_uuid(entity_uuid_str)
         is_gov = pid is not None
         author = row["author_email"]
         parent_author = row.get("parent_author")
-        tender_author = row.get("tender_author")
+        proposal_author = row.get("proposal_author")
         has_parent = row.get("parent_comment_id") is not None
 
         # Build (email, kind) recipient pairs.
@@ -101,12 +101,12 @@ async def enqueue_comment_notifications(ch: CHClient, comment_id: UUID) -> None:
             recipients.append((parent_author, "reply_comment"))
         if (
             not is_gov
-            and tender_author
-            and tender_author != author
-            and not has_parent                     # only top-level
-            and tender_author != parent_author     # dedup with reply notif
+            and proposal_author
+            and proposal_author != author
+            and not has_parent                       # only top-level
+            and proposal_author != parent_author     # dedup with reply notif
         ):
-            recipients.append((tender_author, "top_level_comment"))
+            recipients.append((proposal_author, "top_level_comment"))
 
         if not recipients:
             return
@@ -133,7 +133,7 @@ async def enqueue_comment_notifications(ch: CHClient, comment_id: UUID) -> None:
                 continue
             to_insert.append([
                 email, kind, comment_id, "pending", 0, "",
-                chat_id, row["tender_id"], is_gov, (pid or 0),
+                chat_id, row["entity_id"], is_gov, (pid or 0),
                 now, None, None, None, now,
             ])
 
@@ -143,7 +143,7 @@ async def enqueue_comment_notifications(ch: CHClient, comment_id: UUID) -> None:
             "notification_jobs",
             ["recipient_email", "kind", "source_comment_id", "status",
              "attempts", "last_error",
-             "chat_id", "target_tender_id", "is_gov_proposal", "proposal_id",
+             "chat_id", "target_entity_id", "is_gov_proposal", "proposal_id",
              "enqueued_at", "started_at", "finished_at", "next_attempt_at",
              "updated_at"],
             to_insert,
@@ -183,9 +183,9 @@ async def enqueue_new_proposal_notifications(
             return
 
         source_id = owner_uuid_for_proposal(proposal_id)
-        # target_tender_id is unused for gov notifications but the column is
+        # target_entity_id is unused for gov notifications but the column is
         # non-nullable, so reuse the same synthetic UUID.
-        target_tender_id = source_id
+        target_entity_id = source_id
         now = datetime.now(timezone.utc)
 
         to_insert: list[list] = []
@@ -196,7 +196,7 @@ async def enqueue_new_proposal_notifications(
                 continue
             to_insert.append([
                 email, "gov_proposal_new", source_id, "pending", 0, "",
-                chat_id, target_tender_id, True, proposal_id,
+                chat_id, target_entity_id, True, proposal_id,
                 now, None, None, None, now,
             ])
 
@@ -206,7 +206,7 @@ async def enqueue_new_proposal_notifications(
             "notification_jobs",
             ["recipient_email", "kind", "source_comment_id", "status",
              "attempts", "last_error",
-             "chat_id", "target_tender_id", "is_gov_proposal", "proposal_id",
+             "chat_id", "target_entity_id", "is_gov_proposal", "proposal_id",
              "enqueued_at", "started_at", "finished_at", "next_attempt_at",
              "updated_at"],
             to_insert,
@@ -227,11 +227,11 @@ async def enqueue_new_proposal_notifications(
 # ----------------------------------------------------------------------------
 
 def build_link(*, base_url: str, is_gov: bool, proposal_id: int,
-               tender_id: str, comment_id: UUID) -> str:
+               entity_id: str, comment_id: UUID) -> str:
     base = base_url.rstrip("/")
     if is_gov:
         return f"{base}/governance/{proposal_id}#comment-{comment_id}"
-    return f"{base}/tenders/{tender_id}#comment-{comment_id}"
+    return f"{base}/proposal/{entity_id}#comment-{comment_id}"
 
 
 def build_proposal_link(*, base_url: str, proposal_id: int) -> str:
@@ -261,7 +261,7 @@ def build_message(*, kind: str, author_name: Optional[str], body: str,
     if kind == "reply_comment":
         head = f"{who} replied to your comment"
     else:
-        head = f"{who} commented on your tender"
+        head = f"{who} commented on your proposal"
     return (
         f"{head}:\n\n{preview}\n\n{link}\n\n"
         f"Reply /stop to disable notifications."

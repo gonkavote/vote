@@ -7,7 +7,7 @@ import { formatCountdown, formatCountdownPrecise, formatDateTime } from '../lib/
  * stays current without a page refresh.
  *
  * `intervalMs` controls tick rate — 1s for the big hero counter on the
- * tender page, 30s for the small pills sprinkled across cards.
+ * proposal page, 30s for the small pills sprinkled across cards.
  */
 function useCountdown(
   iso: string | null | undefined,

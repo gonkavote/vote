@@ -1,5 +1,5 @@
 // Package snapshot periodically polls per-voter wealth + host weight for
-// every voter on OPEN tenders and writes weighted snapshots into ClickHouse.
+// every voter on OPEN proposals and writes weighted snapshots into ClickHouse.
 package snapshot
 
 import (
@@ -55,7 +55,7 @@ func (vw voterWeights) community() *big.Int {
 }
 
 func (s *Refresher) tickOnce(ctx context.Context) {
-	voters, err := s.ch.ListOpenTenderVoters(ctx)
+	voters, err := s.ch.ListOpenProposalVoters(ctx)
 	if err != nil {
 		s.log.Errorw("list voters failed", "err", err)
 		return
@@ -64,7 +64,7 @@ func (s *Refresher) tickOnce(ctx context.Context) {
 		return
 	}
 
-	// Deduplicate per-address lookups: same voter may appear in many tenders.
+	// Deduplicate per-address lookups: same voter may appear in many proposals.
 	addrSet := make(map[string]struct{}, len(voters))
 	for _, v := range voters {
 		addrSet[v.Voter] = struct{}{}
@@ -86,7 +86,7 @@ func (s *Refresher) tickOnce(ctx context.Context) {
 	for _, v := range voters {
 		w := weights[v.Voter]
 		rows = append(rows, clickhouse.SnapshotRow{
-			TenderID:          v.TenderID,
+			ProposalID:          v.ProposalID,
 			Voter:             v.Voter,
 			AmountNgonka:      v.AmountNgonka,
 			WeightNgonka:      w.community(),

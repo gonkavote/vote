@@ -26,17 +26,17 @@ UtcDateTime = Annotated[datetime, PlainSerializer(_isoformat_utc, return_type=st
 
 
 # ----------------------------------------------------------------------------
-# Tender
+# Proposal
 # ----------------------------------------------------------------------------
 
-class TenderCreate(BaseModel):
+class ProposalCreate(BaseModel):
     title: str = Field(min_length=3, max_length=80)
     summary: str = Field(min_length=10, max_length=200)
     description: str = Field(min_length=1, max_length=20_000)
     closes_at: Optional[datetime] = None
 
 
-class TenderTally(BaseModel):
+class ProposalTally(BaseModel):
     """All ngonka amounts as decimal strings (UInt128 doesn't fit in JSON int).
 
     `community_weight_ngonka` = Σᵢ (balance + collateral + vesting)ᵢ
@@ -60,7 +60,7 @@ class VoterEntry(BaseModel):
     voted_at: Optional[UtcDateTime] = None
 
 
-class TenderSummary(BaseModel):
+class ProposalSummary(BaseModel):
     id: UUID
     title: str
     summary: str = ""
@@ -70,7 +70,7 @@ class TenderSummary(BaseModel):
     status: str
     created_at: UtcDateTime
     closes_at: Optional[UtcDateTime] = None
-    tally: TenderTally
+    tally: ProposalTally
     comment_count: int = 0
     # Detected source language of title/summary/description.
     source_lang: str = ""
@@ -84,7 +84,7 @@ class TenderSummary(BaseModel):
     translation_status: str = "ready"
 
 
-class TenderDetail(TenderSummary):
+class ProposalDetail(ProposalSummary):
     description: str
     creator_wallet: Optional[str] = None
     voters: list[VoterEntry] = []
@@ -141,7 +141,7 @@ class UserPublicProfile(BaseModel):
     name: Optional[str] = None
     image: Optional[str] = None
     wallet_address: Optional[str] = None
-    tenders: list[TenderSummary] = []
+    proposals: list[ProposalSummary] = []
 
 
 class UserUpdate(BaseModel):

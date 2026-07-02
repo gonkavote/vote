@@ -40,7 +40,7 @@ async def _pick_next_job(ch: CHClient) -> Optional[dict[str, Any]]:
     return await ch.query_one(
         """
         SELECT recipient_email, kind, source_comment_id, attempts, status,
-               chat_id, target_tender_id, is_gov_proposal, proposal_id
+               chat_id, target_entity_id, is_gov_proposal, proposal_id
         FROM gonka_vote.notification_jobs FINAL
         WHERE status = 'pending'
           AND (next_attempt_at IS NULL OR next_attempt_at <= now64(3))
@@ -63,7 +63,7 @@ async def _upsert_job(
 ) -> None:
     """Re-INSERT with the same merge key and a fresh updated_at.
     ReplacingMergeTree(updated_at) keeps the latest version on FINAL.
-    Preserves enqueued_at + the pre-resolved chat_id / tender pointers."""
+    Preserves enqueued_at + the pre-resolved chat_id / entity pointers."""
     existing = await ch.query_one(
         """
         SELECT enqueued_at
@@ -81,13 +81,13 @@ async def _upsert_job(
         "notification_jobs",
         ["recipient_email", "kind", "source_comment_id", "status",
          "attempts", "last_error",
-         "chat_id", "target_tender_id", "is_gov_proposal", "proposal_id",
+         "chat_id", "target_entity_id", "is_gov_proposal", "proposal_id",
          "enqueued_at", "started_at", "finished_at", "next_attempt_at",
          "updated_at"],
         [[
             job["recipient_email"], job["kind"], job["source_comment_id"],
             status, attempts, last_error,
-            int(job["chat_id"]), job["target_tender_id"],
+            int(job["chat_id"]), job["target_entity_id"],
             bool(job["is_gov_proposal"]), int(job["proposal_id"]),
             enqueued_at, started_at, finished_at, next_attempt_at, now,
         ]],
@@ -246,7 +246,7 @@ async def _process_one(ch: CHClient, job: dict[str, Any]) -> None:
             base_url=settings.public_base_url,
             is_gov=bool(job["is_gov_proposal"]),
             proposal_id=int(job["proposal_id"]),
-            tender_id=str(job["target_tender_id"]),
+            entity_id=str(job["target_entity_id"]),
             comment_id=job["source_comment_id"],
         )
         text = build_message(
@@ -310,11 +310,11 @@ async def _recover_running(ch: CHClient) -> int:
         """
         INSERT INTO gonka_vote.notification_jobs
             (recipient_email, kind, source_comment_id, status, attempts,
-             last_error, chat_id, target_tender_id, is_gov_proposal,
+             last_error, chat_id, target_entity_id, is_gov_proposal,
              proposal_id, enqueued_at, started_at, finished_at,
              next_attempt_at, updated_at)
         SELECT recipient_email, kind, source_comment_id, 'pending', attempts,
-               '', chat_id, target_tender_id, is_gov_proposal,
+               '', chat_id, target_entity_id, is_gov_proposal,
                proposal_id, enqueued_at, NULL, NULL, NULL, now64(3)
         FROM gonka_vote.notification_jobs FINAL
         WHERE status = 'running'

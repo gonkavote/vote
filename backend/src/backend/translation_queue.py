@@ -3,10 +3,10 @@
 Both the API (router.py) and the worker import from here.
 
 Job kinds:
-  - 'detect_tender' / 'detect_comment' — created at INSERT time. Tells the
+  - 'detect_proposal' / 'detect_comment' — created at INSERT time. Tells the
     worker to call the AI language detector, write source_lang back to
-    tenders/comments, and enqueue per-language translation jobs.
-  - 'tender' / 'comment' — actual translation jobs, one per target_lang.
+    proposals/comments, and enqueue per-language translation jobs.
+  - 'proposal' / 'comment' — actual translation jobs, one per target_lang.
 
 target_lang for detect jobs is set to '' (an arbitrary placeholder) so the
 ORDER BY (kind, entity_id, target_lang) key stays unique.

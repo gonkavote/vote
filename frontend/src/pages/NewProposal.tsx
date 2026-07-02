@@ -2,7 +2,7 @@ import { FormEvent, useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { api, TenderSummary } from '../lib/api'
+import { api, ProposalSummary } from '../lib/api'
 import { Markdown } from '../lib/markdown'
 import { useMe } from '../hooks/useMe'
 import { useLogin } from '../lib/loginContext'
@@ -31,7 +31,7 @@ function presetValue(days: number): string {
   return toLocalInputValue(d)
 }
 
-export function NewTenderPage() {
+export function NewProposalPage() {
   const { t } = useTranslation()
   const { data: me, isLoading } = useMe()
   const nav = useNavigate()
@@ -53,14 +53,14 @@ export function NewTenderPage() {
 
   const create = useMutation({
     mutationFn: () =>
-      api.post<TenderSummary>('/tenders', {
+      api.post<ProposalSummary>('/proposals', {
         title: title.trim(),
         summary: summary.trim(),
         description: description.trim(),
         // datetime-local has no timezone; treat as local and convert to UTC ISO.
         closes_at: new Date(closesAt).toISOString(),
       }),
-    onSuccess: (t) => nav(`/tenders/${t.id}`),
+    onSuccess: (t) => nav(`/proposal/${t.id}`),
   })
 
   const titleLen = title.trim().length
@@ -92,15 +92,15 @@ export function NewTenderPage() {
 
   return (
     <div className="max-w-[760px] mx-auto px-5 md:px-12 py-12">
-      <h1 className="text-3xl font-extrabold tracking-tight mb-1">{t('newTender.title')}</h1>
+      <h1 className="text-3xl font-extrabold tracking-tight mb-1">{t('newProposal.title')}</h1>
       <p className="text-text-2 text-sm mb-8">
-        {t('newTender.intro')}
+        {t('newProposal.intro')}
       </p>
 
       <form onSubmit={submit} className="space-y-6">
         <label className="block">
           <div className="flex items-baseline justify-between mb-2">
-            <span className="text-sm font-semibold">{t('newTender.titleField')}</span>
+            <span className="text-sm font-semibold">{t('newProposal.titleField')}</span>
             <span className={`text-xs ${titleLen > 80 ? 'text-rose-400' : 'text-text-2'}`}>
               {titleLen} / 80
             </span>
@@ -111,13 +111,13 @@ export function NewTenderPage() {
             maxLength={80}
             required
             className="w-full bg-bg-2 border border-border rounded-lg p-3 text-base focus:outline-none focus:border-accent/50"
-            placeholder={t('newTender.titlePlaceholder')}
+            placeholder={t('newProposal.titlePlaceholder')}
           />
         </label>
 
         <label className="block">
           <div className="flex items-baseline justify-between mb-2">
-            <span className="text-sm font-semibold">{t('newTender.summary')}</span>
+            <span className="text-sm font-semibold">{t('newProposal.summary')}</span>
             <span className={`text-xs ${
               summaryLen > 200 || (summaryLen > 0 && summaryLen < 10) ? 'text-rose-400' : 'text-text-2'
             }`}>
@@ -131,30 +131,30 @@ export function NewTenderPage() {
             rows={3}
             required
             className="w-full bg-bg-2 border border-border rounded-lg p-3 text-sm focus:outline-none focus:border-accent/50"
-            placeholder={t('newTender.summaryPlaceholder')}
+            placeholder={t('newProposal.summaryPlaceholder')}
           />
           <p className="text-text-2 text-xs mt-1">
-            {t('newTender.summaryHint')}
+            {t('newProposal.summaryHint')}
           </p>
         </label>
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold">{t('newTender.description')}</span>
+            <span className="text-sm font-semibold">{t('newProposal.description')}</span>
             <div className="flex gap-1 text-xs">
               <button
                 type="button"
                 onClick={() => setTab('edit')}
                 className={`px-2 py-1 rounded ${tab === 'edit' ? 'bg-white/10' : 'text-text-2'}`}
               >
-                {t('newTender.edit')}
+                {t('newProposal.edit')}
               </button>
               <button
                 type="button"
                 onClick={() => setTab('preview')}
                 className={`px-2 py-1 rounded ${tab === 'preview' ? 'bg-white/10' : 'text-text-2'}`}
               >
-                {t('newTender.preview')}
+                {t('newProposal.preview')}
               </button>
             </div>
           </div>
@@ -165,14 +165,14 @@ export function NewTenderPage() {
               rows={14}
               required
               className="w-full bg-bg-2 border border-border rounded-lg p-3 text-sm font-mono focus:outline-none focus:border-accent/50"
-              placeholder={t('newTender.descriptionPlaceholder')}
+              placeholder={t('newProposal.descriptionPlaceholder')}
             />
           ) : (
             <div className="card prose prose-invert prose-sm max-w-none min-h-[300px]">
               {description ? (
                 <Markdown>{description}</Markdown>
               ) : (
-                <p className="text-text-2">{t('newTender.previewEmpty')}</p>
+                <p className="text-text-2">{t('newProposal.previewEmpty')}</p>
               )}
             </div>
           )}
@@ -180,7 +180,7 @@ export function NewTenderPage() {
 
         <div>
           <span className="text-sm font-semibold mb-2 block">
-            {t('newTender.deadline')} <span className="text-text-2 font-normal">{t('newTender.deadlineHint', { days: MIN_DAYS })}</span>
+            {t('newProposal.deadline')} <span className="text-text-2 font-normal">{t('newProposal.deadlineHint', { days: MIN_DAYS })}</span>
           </span>
           <div className="flex flex-wrap gap-2 mb-3">
             {PRESETS.map((p) => (
@@ -190,7 +190,7 @@ export function NewTenderPage() {
                 onClick={() => setClosesAt(presetValue(p.days))}
                 className="btn-ghost text-xs"
               >
-                {t(`newTender.preset.${p.key}`)}
+                {t(`newProposal.preset.${p.key}`)}
               </button>
             ))}
           </div>
@@ -204,12 +204,12 @@ export function NewTenderPage() {
           />
           {!deadlineValid && closesAt && (
             <p className="text-rose-400 text-xs mt-1">
-              {t('newTender.deadlineMinError', { days: MIN_DAYS })}
+              {t('newProposal.deadlineMinError', { days: MIN_DAYS })}
             </p>
           )}
           {deadlineValid && closesAt && (
             <p className="text-text-2 text-xs mt-1">
-              {t('newTender.deadlinePreview', { when: formatDateTime(new Date(closesAt).toISOString()) })}
+              {t('newProposal.deadlinePreview', { when: formatDateTime(new Date(closesAt).toISOString()) })}
             </p>
           )}
         </div>
@@ -224,10 +224,10 @@ export function NewTenderPage() {
             disabled={create.isPending || formIncomplete}
             className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {create.isPending ? t('newTender.publishing') : t('newTender.publish')}
+            {create.isPending ? t('newProposal.publishing') : t('newProposal.publish')}
           </button>
           <button type="button" onClick={() => nav(-1)} className="btn-ghost">
-            {t('newTender.back')}
+            {t('newProposal.back')}
           </button>
         </div>
       </form>
@@ -240,10 +240,10 @@ function NotSignedIn() {
   const { openLogin } = useLogin()
   return (
     <div className="max-w-[680px] mx-auto px-5 py-16 text-center">
-      <h1 className="text-2xl font-bold mb-4">{t('newTender.signInTitle')}</h1>
+      <h1 className="text-2xl font-bold mb-4">{t('newProposal.signInTitle')}</h1>
       <button
         type="button"
-        onClick={() => openLogin('/tenders/new')}
+        onClick={() => openLogin('/proposal/new')}
         className="btn-primary"
       >
         {t('auth.signIn')}

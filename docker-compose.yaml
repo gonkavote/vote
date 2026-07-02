@@ -144,10 +144,10 @@ services:
       # Bot/crawler interception: search engines (Googlebot, Bingbot,
       # YandexBot, …) and social-card fetchers (Twitterbot,
       # facebookexternalhit, LinkedInBot, TelegramBot, WhatsApp preview,
-      # Slackbot, Discordbot, …) get routed to FastAPI for /, /tenders/{uuid},
+      # Slackbot, Discordbot, …) get routed to FastAPI for /, /proposal/{uuid},
       # /governance and /governance/{id}, where we render real titles +
       # descriptions + body from the DB. Real browsers keep going to the SPA.
-      - "traefik.http.routers.vote-backend-og.rule=Host(`${PUBLIC_HOST:-localhost}`) && PathRegexp(`^/$|^/tenders/[a-fA-F0-9-]{36}$|^/governance(/[0-9]+)?$`) && HeaderRegexp(`User-Agent`, `(?i).*(bot|crawler|spider|facebookexternalhit|telegrambot|whatsapp|slackbot|discordbot|preview|embed|skype|bingpreview|outbrain|pinterest|google|baidu|yandex|duckduckgo|qwant|petalbot|seznambot|applebot).*`)"
+      - "traefik.http.routers.vote-backend-og.rule=Host(`${PUBLIC_HOST:-localhost}`) && PathRegexp(`^/$|^/proposal/[a-fA-F0-9-]{36}$|^/governance(/[0-9]+)?$`) && HeaderRegexp(`User-Agent`, `(?i).*(bot|crawler|spider|facebookexternalhit|telegrambot|whatsapp|slackbot|discordbot|preview|embed|skype|bingpreview|outbrain|pinterest|google|baidu|yandex|duckduckgo|qwant|petalbot|seznambot|applebot).*`)"
       - "traefik.http.routers.vote-backend-og.entrypoints=web"
       - "traefik.http.routers.vote-backend-og.priority=200"
       - "traefik.http.routers.vote-backend-og.service=vote-backend"
@@ -161,7 +161,7 @@ services:
   translator:
     # Same image as backend (shares the `backend` package); just a different
     # entrypoint. Polls translation_jobs in ClickHouse and writes translated
-    # text into tenders.*_t / comments.body_t. Not exposed to traefik.
+    # text into proposals.*_t / comments.body_t. Not exposed to traefik.
     build:
       context: ./backend
       dockerfile: Dockerfile

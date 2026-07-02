@@ -10,20 +10,20 @@ export function TallyStats({ tally, layout = 'card' }: {
   const isInline = layout === 'inline'
   const stats = [
     {
-      label: t('tender.tally.voters'),
+      label: t('proposal.tally.voters'),
       value: tally.voter_count.toLocaleString(),
     },
     {
-      label: isInline ? t('tender.tally.community') : t('tender.tally.communityWeight'),
+      label: isInline ? t('proposal.tally.community') : t('proposal.tally.communityWeight'),
       value: formatGNK(tally.community_weight_ngonka, { integer: true, noUnit: true }),
     },
     {
-      label: isInline ? t('tender.tally.hosts') : t('tender.tally.hostsWeight'),
+      label: isInline ? t('proposal.tally.hosts') : t('proposal.tally.hostsWeight'),
       value: formatCount(tally.hosts_weight_ngonka),
     },
     {
-      label: isInline ? t('tender.tally.grant') : t('tender.tally.avgGrant'),
-      // Card view (tender detail) keeps two decimals (1.26M GNK); the
+      label: isInline ? t('proposal.tally.grant') : t('proposal.tally.avgGrant'),
+      // Card view (proposal detail) keeps two decimals (1.26M GNK); the
       // home-page inline view drops them so cards stay scannable (1M GNK).
       value: formatGNK(tally.weighted_avg_bid_ngonka, {
         integer: true,
