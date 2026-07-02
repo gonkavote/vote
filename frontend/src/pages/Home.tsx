@@ -58,7 +58,7 @@ export function HomePage() {
   const lng = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
   const { data: proposals, isLoading } = useQuery({
     queryKey: ['proposals', lng],
-    queryFn: () => api.get<ProposalSummary[]>('/proposals'),
+    queryFn: () => api.get<ProposalSummary[]>('/proposal'),
     refetchInterval: 30_000,
   })
   const { data: me } = useMe()

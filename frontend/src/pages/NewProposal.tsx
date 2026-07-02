@@ -53,7 +53,7 @@ export function NewProposalPage() {
 
   const create = useMutation({
     mutationFn: () =>
-      api.post<ProposalSummary>('/proposals', {
+      api.post<ProposalSummary>('/proposal', {
         title: title.trim(),
         summary: summary.trim(),
         description: description.trim(),

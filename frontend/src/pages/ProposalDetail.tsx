@@ -243,7 +243,7 @@ export function ProposalDetailPage() {
  * column is hidden on small screens (it's a niche per-host metric).
  *
  * Pagination: client-side, 10 rows per page. The full list is already in
- * memory from /api/proposals/{id}, so "Show next 10" just bumps a counter.
+ * memory from /api/proposal/{id}, so "Show next 10" just bumps a counter.
  */
 const PAGE_SIZE = 10
 

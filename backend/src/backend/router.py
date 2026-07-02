@@ -187,7 +187,7 @@ async def update_me(payload: UserUpdate, user: dict = Depends(current_user)) -> 
 # Proposals
 # ----------------------------------------------------------------------------
 #
-# Every endpoint below is registered under BOTH /proposals and /tenders paths
+# Every endpoint below is registered under BOTH /proposal and /tenders paths
 # so that external integrations that still hit /api/tenders/* keep working.
 # The legacy /tenders alias is hidden from OpenAPI docs.
 #
@@ -220,7 +220,7 @@ WHERE proposal_id = {{pid:String}}
 """
 
 
-@router.get("/proposals")
+@router.get("/proposal")
 @router.get("/tenders", include_in_schema=False)
 async def list_proposals(lang: Optional[str] = None) -> list[ProposalSummary]:
     ch = _ensure_ch()
@@ -289,7 +289,7 @@ async def list_proposals(lang: Optional[str] = None) -> list[ProposalSummary]:
     return [_row_to_summary(r, target_lang) for r in rows]
 
 
-@router.post("/proposals", status_code=201)
+@router.post("/proposal", status_code=201)
 @router.post("/tenders", status_code=201, include_in_schema=False)
 async def create_proposal(
     payload: ProposalCreate,
@@ -351,7 +351,7 @@ async def create_proposal(
     )
 
 
-@router.get("/proposals/{proposal_id}")
+@router.get("/proposal/{proposal_id}")
 @router.get("/tenders/{proposal_id}", include_in_schema=False)
 async def get_proposal(proposal_id: UUID, lang: Optional[str] = None) -> ProposalDetail:
     ch = _ensure_ch()
@@ -448,7 +448,7 @@ async def get_proposal(proposal_id: UUID, lang: Optional[str] = None) -> Proposa
     )
 
 
-@router.post("/proposals/{proposal_id}/close")
+@router.post("/proposal/{proposal_id}/close")
 @router.post("/tenders/{proposal_id}/close", include_in_schema=False)
 async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
     ch = _ensure_ch()
@@ -484,7 +484,7 @@ async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
     return {"ok": True}
 
 
-@router.delete("/proposals/{proposal_id}")
+@router.delete("/proposal/{proposal_id}")
 @router.delete("/tenders/{proposal_id}", include_in_schema=False)
 async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin)):
     """Admin-only soft delete. Cascades to all comments on this proposal."""
@@ -540,7 +540,7 @@ async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin
 # Comments
 # ----------------------------------------------------------------------------
 
-@router.get("/proposals/{proposal_id}/comments")
+@router.get("/proposal/{proposal_id}/comments")
 @router.get("/tenders/{proposal_id}/comments", include_in_schema=False)
 async def list_comments(
     proposal_id: UUID,
@@ -613,7 +613,7 @@ async def list_comments(
     return out
 
 
-@router.post("/proposals/{proposal_id}/comments", status_code=201)
+@router.post("/proposal/{proposal_id}/comments", status_code=201)
 @router.post("/tenders/{proposal_id}/comments", status_code=201, include_in_schema=False)
 async def add_comment(
     proposal_id: UUID,
