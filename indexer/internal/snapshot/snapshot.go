@@ -105,9 +105,6 @@ func (s *Refresher) tickOnce(ctx context.Context) {
 		"voters", len(addrs), "rows", len(rows), "epoch", epoch)
 }
 
-// fetchWeights pulls balance + vesting + host_weight for every address
-// concurrently (bounded by BalanceConcurrency). Failures fall back to
-// zero so the snapshot always succeeds.
 func (s *Refresher) fetchWeights(ctx context.Context, addrs []string, epoch uint64) map[string]voterWeights {
 	out := make(map[string]voterWeights, len(addrs))
 	var mu sync.Mutex
@@ -132,12 +129,12 @@ func (s *Refresher) fetchWeights(ctx context.Context, addrs []string, epoch uint
 }
 
 func (s *Refresher) fetchOne(ctx context.Context, addr string, epoch uint64) voterWeights {
-	bal, err := s.rpc.GetNgonkaBalance(ctx, addr)
+	bal, err := retry(ctx, func() (*big.Int, error) { return s.rpc.GetNgonkaBalance(ctx, addr) })
 	if err != nil {
 		s.log.Warnw("balance fetch failed", "addr", addr, "err", err)
 		bal = big.NewInt(0)
 	}
-	vest, err := s.rpc.GetVesting(ctx, addr)
+	vest, err := retry(ctx, func() (*big.Int, error) { return s.rpc.GetVesting(ctx, addr) })
 	if err != nil {
 		vest = big.NewInt(0)
 	}
@@ -148,4 +145,26 @@ func (s *Refresher) fetchOne(ctx context.Context, addr string, epoch uint64) vot
 		vesting:    vest,
 		hostWeight: hw,
 	}
+}
+
+func retry(ctx context.Context, fn func() (*big.Int, error)) (*big.Int, error) {
+	const maxAttempts = 10
+	delay := time.Second
+	var last error
+	for i := 0; i < maxAttempts; i++ {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+			delay *= 2
+		}
+		v, err := fn()
+		if err == nil {
+			return v, nil
+		}
+		last = err
+	}
+	return nil, last
 }
