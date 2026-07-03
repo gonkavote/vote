@@ -120,6 +120,7 @@ func (c *Client) ListOpenProposalVoters(ctx context.Context) ([]VoterRow, error)
 		WHERE v.proposal_id IN (
 			SELECT toString(id) FROM gonka_vote.proposals FINAL
 			WHERE status = 'open' AND deleted_at IS NULL
+			  AND (closes_at IS NULL OR closes_at > now64(3))
 		)
 	`)
 	if err != nil {

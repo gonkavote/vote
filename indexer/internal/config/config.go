@@ -44,7 +44,7 @@ func Load() (*Config, error) {
 		ContractAddress:    os.Getenv("CONTRACT_ADDRESS"),
 		HTTPTimeout:        envDuration("HTTP_TIMEOUT", 30*time.Second),
 		ScanInterval:       envDuration("SCAN_INTERVAL", 2*time.Minute),
-		SnapshotInterval:   envDuration("SNAPSHOT_INTERVAL", 10*time.Minute),
+		SnapshotInterval:   envDuration("SNAPSHOT_INTERVAL", 5*time.Minute),
 		BalanceConcurrency: envInt("BALANCE_CONCURRENCY", 10),
 		HealthAddr:         env("HEALTH_ADDR", ":8080"),
 		ClickHouse: ClickHouseConfig{
