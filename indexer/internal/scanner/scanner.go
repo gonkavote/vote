@@ -1,11 +1,11 @@
 // Package scanner periodically pulls successful MsgExecuteContract txs that
-// target our contract via Tendermint tx_search, parses the {"vote": {...}}
-// payload and writes votes into ClickHouse.
+// target our contract via Tendermint tx_search and writes votes into
+// ClickHouse. Vote metadata (tender_id, voter, amount) is read directly from
+// the tx events emitted by the contract — no extra REST fetch needed.
 package scanner
 
 import (
 	"context"
-	"encoding/json"
 	"math/big"
 	"strings"
 	"time"
@@ -66,21 +66,15 @@ func (s *Scanner) tickOnce(ctx context.Context) {
 		return
 	}
 
+	now := time.Now().UTC()
 	rows := make([]clickhouse.VoteRow, 0, len(hits))
 	maxHeight := checkpoint
 	for _, h := range hits {
-		msgs, ts, _, err := s.rpc.FetchTxBody(ctx, h.Hash)
-		if err != nil {
-			s.log.Warnw("fetch tx body failed", "hash", h.Hash, "err", err)
+		vr, ok := s.parseVoteEvents(h, now)
+		if !ok {
 			continue
 		}
-		for _, m := range msgs {
-			vr, ok := s.parseVoteMsg(m, h.Hash, h.Height, ts)
-			if !ok {
-				continue
-			}
-			rows = append(rows, vr)
-		}
+		rows = append(rows, vr)
 		if h.Height > maxHeight {
 			maxHeight = h.Height
 		}
@@ -101,57 +95,41 @@ func (s *Scanner) tickOnce(ctx context.Context) {
 	}
 }
 
-// parseVoteMsg extracts a VoteRow from a single decoded Cosmos message JSON
-// if it matches our contract and {"vote": {...}} payload.
-func (s *Scanner) parseVoteMsg(raw json.RawMessage, txHash string, height uint64, ts time.Time) (clickhouse.VoteRow, bool) {
-	var m struct {
-		Type     string          `json:"@type"`
-		Sender   string          `json:"sender"`
-		Contract string          `json:"contract"`
-		Msg      json.RawMessage `json:"msg"`
+// parseVoteEvents extracts a VoteRow from the `wasm` event attributes emitted
+// by the contract's `vote` action. Contract wire format still uses `tender_id`.
+func (s *Scanner) parseVoteEvents(h rpc.TxSearchResult, ts time.Time) (clickhouse.VoteRow, bool) {
+	for _, ev := range h.Events {
+		if ev.Type != "wasm" {
+			continue
+		}
+		attrs := map[string]string{}
+		for _, a := range ev.Attributes {
+			attrs[a.Key] = a.Value
+		}
+		if !strings.EqualFold(attrs["_contract_address"], s.cfg.ContractAddress) {
+			continue
+		}
+		if attrs["action"] != "vote" {
+			continue
+		}
+		proposalID := attrs["tender_id"]
+		voter := attrs["voter"]
+		amount := attrs["amount"]
+		if proposalID == "" || voter == "" || amount == "" {
+			continue
+		}
+		amt, ok := new(big.Int).SetString(amount, 10)
+		if !ok || amt.Sign() <= 0 {
+			continue
+		}
+		return clickhouse.VoteRow{
+			ProposalID:   proposalID,
+			Voter:        voter,
+			AmountNgonka: amt,
+			Height:       h.Height,
+			TxHash:       h.Hash,
+			Timestamp:    ts,
+		}, true
 	}
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return clickhouse.VoteRow{}, false
-	}
-	if m.Type != "/cosmwasm.wasm.v1.MsgExecuteContract" {
-		return clickhouse.VoteRow{}, false
-	}
-	if !strings.EqualFold(m.Contract, s.cfg.ContractAddress) {
-		return clickhouse.VoteRow{}, false
-	}
-
-	var action map[string]json.RawMessage
-	if err := json.Unmarshal(m.Msg, &action); err != nil {
-		return clickhouse.VoteRow{}, false
-	}
-	voteRaw, ok := action["vote"]
-	if !ok {
-		return clickhouse.VoteRow{}, false
-	}
-	var vote struct {
-		// DO NOT rename `tender_id` — this JSON tag matches the on-chain
-		// CosmWasm contract wire format. The Go field name is renamed but
-		// the tag stays for wire compatibility.
-		ProposalID string `json:"tender_id"`
-		Amount     string `json:"amount"` // Uint128 serializes as string
-	}
-	if err := json.Unmarshal(voteRaw, &vote); err != nil {
-		return clickhouse.VoteRow{}, false
-	}
-	if vote.ProposalID == "" || vote.Amount == "" {
-		return clickhouse.VoteRow{}, false
-	}
-	amt, ok := new(big.Int).SetString(vote.Amount, 10)
-	if !ok || amt.Sign() <= 0 {
-		return clickhouse.VoteRow{}, false
-	}
-
-	return clickhouse.VoteRow{
-		ProposalID:     vote.ProposalID,
-		Voter:        m.Sender,
-		AmountNgonka: amt,
-		Height:       height,
-		TxHash:       txHash,
-		Timestamp:    ts,
-	}, true
+	return clickhouse.VoteRow{}, false
 }

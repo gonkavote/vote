@@ -45,24 +45,25 @@ func New(rpcURL, restURL, trackerURL string, timeout time.Duration) *Client {
 // Tendermint RPC: tx_search
 // ----------------------------------------------------------------------------
 
-type TxSearchResult struct {
-	Hash     string
-	Height   uint64
-	TxIndex  uint32
-	Code     int
-	RawLog   string
-	Messages []json.RawMessage // tx.body.messages decoded via REST tx fetch
-	Memo     string
-	Time     time.Time
+type TxEventAttr struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
-// SearchExecuteContractTxs returns successful tx that contain a wasm
-// `execute._contract_address` event matching contractAddr at height >= minHeight.
-// Tendermint returns up to `perPage` per request; we paginate until exhausted.
-//
-// Note: tx_search itself only returns hash + height + tx_result. We then fetch
-// the full decoded JSON via REST `/cosmos/tx/v1beta1/txs/{hash}` so we can read
-// the `msg` payload of MsgExecuteContract directly without protobuf decoding.
+type TxEvent struct {
+	Type       string        `json:"type"`
+	Attributes []TxEventAttr `json:"attributes"`
+}
+
+type TxSearchResult struct {
+	Hash    string
+	Height  uint64
+	TxIndex uint32
+	Code    int
+	RawLog  string
+	Events  []TxEvent
+}
+
 func (c *Client) SearchExecuteContractTxs(
 	ctx context.Context,
 	contractAddr string,
@@ -73,8 +74,6 @@ func (c *Client) SearchExecuteContractTxs(
 
 	page := 1
 	for {
-		// Tendermint query syntax: events as `type.attribute='value' AND ...`
-		// `execute._contract_address` is the canonical wasmd attribute.
 		query := fmt.Sprintf(
 			`execute._contract_address='%s' AND tx.height>=%d`,
 			contractAddr, minHeight,
@@ -100,8 +99,9 @@ func (c *Client) SearchExecuteContractTxs(
 					Height   string `json:"height"`
 					Index    uint32 `json:"index"`
 					TxResult struct {
-						Code int    `json:"code"`
-						Log  string `json:"log"`
+						Code   int       `json:"code"`
+						Log    string    `json:"log"`
+						Events []TxEvent `json:"events"`
 					} `json:"tx_result"`
 				} `json:"txs"`
 				TotalCount string `json:"total_count"`
@@ -124,6 +124,7 @@ func (c *Client) SearchExecuteContractTxs(
 				TxIndex: tx.Index,
 				Code:    tx.TxResult.Code,
 				RawLog:  tx.TxResult.Log,
+				Events:  tx.TxResult.Events,
 			})
 		}
 		total, _ := strconv.Atoi(resp.Result.TotalCount)
@@ -133,41 +134,6 @@ func (c *Client) SearchExecuteContractTxs(
 		page++
 	}
 	return out, nil
-}
-
-// ----------------------------------------------------------------------------
-// Cosmos REST: GET /cosmos/tx/v1beta1/txs/{hash}
-// ----------------------------------------------------------------------------
-
-type cosmosTxResponse struct {
-	Tx struct {
-		Body struct {
-			Messages []json.RawMessage `json:"messages"`
-			Memo     string            `json:"memo"`
-		} `json:"body"`
-	} `json:"tx"`
-	TxResponse struct {
-		Height    string `json:"height"`
-		Timestamp string `json:"timestamp"`
-		TxHash    string `json:"txhash"`
-		Code      int    `json:"code"`
-	} `json:"tx_response"`
-}
-
-// FetchTxBody fetches the tx body and parses the timestamp. Used after
-// tx_search to read MsgExecuteContract.msg payload.
-func (c *Client) FetchTxBody(ctx context.Context, hash string) ([]json.RawMessage, time.Time, string, error) {
-	u := fmt.Sprintf("%s/cosmos/tx/v1beta1/txs/%s", c.restURL, hash)
-	body, err := c.getJSON(ctx, u)
-	if err != nil {
-		return nil, time.Time{}, "", fmt.Errorf("fetch tx %s: %w", hash, err)
-	}
-	var resp cosmosTxResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, time.Time{}, "", fmt.Errorf("decode tx %s: %w", hash, err)
-	}
-	ts, _ := time.Parse(time.RFC3339Nano, resp.TxResponse.Timestamp)
-	return resp.Tx.Body.Messages, ts, resp.Tx.Body.Memo, nil
 }
 
 // ----------------------------------------------------------------------------
