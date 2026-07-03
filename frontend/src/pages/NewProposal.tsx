@@ -65,17 +65,14 @@ export function NewProposalPage() {
 
   const titleLen = title.trim().length
   const summaryLen = summary.trim().length
+  const descLen = description.trim().length
   const titleValid = titleLen >= 3 && titleLen <= 80
   const summaryValid = summaryLen >= 10 && summaryLen <= 200
+  const descValid = descLen >= 1 && descLen <= 20_000
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (
-      !titleValid ||
-      !summaryValid ||
-      description.trim().length === 0 ||
-      !deadlineValid
-    ) return
+    if (!titleValid || !summaryValid || !descValid || !deadlineValid) return
     create.mutate()
   }
 
@@ -84,11 +81,7 @@ export function NewProposalPage() {
     return <NotSignedIn />
   }
 
-  const formIncomplete =
-    !titleValid ||
-    !summaryValid ||
-    description.trim().length === 0 ||
-    !deadlineValid
+  const formIncomplete = !titleValid || !summaryValid || !descValid || !deadlineValid
 
   return (
     <div className="max-w-[760px] mx-auto px-5 md:px-12 py-12">
@@ -141,21 +134,26 @@ export function NewProposalPage() {
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold">{t('newProposal.description')}</span>
-            <div className="flex gap-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setTab('edit')}
-                className={`px-2 py-1 rounded ${tab === 'edit' ? 'bg-white/10' : 'text-text-2'}`}
-              >
-                {t('newProposal.edit')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab('preview')}
-                className={`px-2 py-1 rounded ${tab === 'preview' ? 'bg-white/10' : 'text-text-2'}`}
-              >
-                {t('newProposal.preview')}
-              </button>
+            <div className="flex items-center gap-3">
+              <span className={`text-xs ${descLen > 20_000 ? 'text-rose-400' : 'text-text-2'}`}>
+                {descLen} / 20000
+              </span>
+              <div className="flex gap-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setTab('edit')}
+                  className={`px-2 py-1 rounded ${tab === 'edit' ? 'bg-white/10' : 'text-text-2'}`}
+                >
+                  {t('newProposal.edit')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab('preview')}
+                  className={`px-2 py-1 rounded ${tab === 'preview' ? 'bg-white/10' : 'text-text-2'}`}
+                >
+                  {t('newProposal.preview')}
+                </button>
+              </div>
             </div>
           </div>
           {tab === 'edit' ? (
@@ -164,6 +162,7 @@ export function NewProposalPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={14}
               required
+              maxLength={20_000}
               className="w-full bg-bg-2 border border-border rounded-lg p-3 text-sm font-mono focus:outline-none focus:border-accent/50"
               placeholder={t('newProposal.descriptionPlaceholder')}
             />
