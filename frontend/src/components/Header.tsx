@@ -33,9 +33,9 @@ export function Header() {
   const { openLogin } = useLogin()
 
   const onGovernance = loc.pathname.startsWith('/governance')
-  // The Governance link uses the same .btn-ghost style as the other header
-  // buttons, with an extra accent overlay when the user is on that page.
+  const onProposals = loc.pathname === '/'
   const govActiveCls = onGovernance ? 'bg-accent/15 text-accent-2' : ''
+  const proposalsActiveCls = onProposals ? 'bg-accent/15 text-accent-2' : ''
   const activeProposalsCount = useActiveProposalsCount()
 
   return (
@@ -47,6 +47,9 @@ export function Header() {
         </span>
       </Link>
       <nav className="flex items-center gap-1 sm:gap-2">
+        <Link to="/" className={`hidden sm:inline-flex btn-ghost ${proposalsActiveCls}`}>
+          {t('header.proposals')}
+        </Link>
         <Link to="/governance" className={`btn-ghost ${govActiveCls} relative`}>
           {t('header.governance')}
           {activeProposalsCount > 0 && (
