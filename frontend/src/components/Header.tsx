@@ -47,9 +47,6 @@ export function Header() {
         </span>
       </Link>
       <nav className="flex items-center gap-1 sm:gap-2">
-        <Link to="/" className={`hidden sm:inline-flex btn-ghost ${proposalsActiveCls}`}>
-          {t('header.proposals')}
-        </Link>
         <Link to="/governance" className={`btn-ghost ${govActiveCls} relative`}>
           {t('header.governance')}
           {activeProposalsCount > 0 && (
@@ -60,6 +57,9 @@ export function Header() {
               {activeProposalsCount > 99 ? '99+' : activeProposalsCount}
             </span>
           )}
+        </Link>
+        <Link to="/" className={`hidden sm:inline-flex btn-ghost ${proposalsActiveCls}`}>
+          {t('header.proposals')}
         </Link>
         <Link to="/proposal/new" className="hidden sm:inline-flex btn-ghost">
           {t('header.newProposal')}
