@@ -184,7 +184,7 @@
   },
   "governance": {
     "list": {
-      "title": "Proposals",
+      "title": "Governance",
       "subtitle": "On-chain governance: software upgrades, parameter changes, community spends.",
       "search": "Search title or voter address…"
     },
