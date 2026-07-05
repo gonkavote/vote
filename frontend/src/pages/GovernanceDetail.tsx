@@ -151,11 +151,7 @@ export function GovernanceDetailPage() {
           {tab === 'details' && <DetailsTab p={p} />}
           {tab === 'votes' && <VotesTab pid={pid} />}
           {tab === 'deposits' && <DepositsTab pid={pid} />}
-          {tab === 'json' && (
-            <pre className="card text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-words">
-              {JSON.stringify(rawProposal(p), null, 2)}
-            </pre>
-          )}
+          {tab === 'json' && <JsonTab p={p} />}
         </div>
 
         <aside className="hidden lg:block">
@@ -378,6 +374,37 @@ const OPTION_RANK: Record<string, number> = {
   VOTE_OPTION_NO: 2,
   VOTE_OPTION_NO_WITH_VETO: 3,
   VOTE_OPTION_ABSTAIN: 4,
+}
+
+function JsonTab({ p }: { p: GovProposalDetail }) {
+  const { t } = useTranslation()
+  const [copied, setCopied] = useState(false)
+  const json = useMemo(() => JSON.stringify(rawProposal(p), null, 2), [p])
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(json)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <div className="card relative">
+      <button
+        type="button"
+        onClick={onCopy}
+        className="absolute top-3 right-3 text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-text-2 hover:text-text transition-colors"
+      >
+        {copied ? t('governance.detail.jsonCopied') : t('governance.detail.jsonCopy')}
+      </button>
+      <pre className="text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-words pr-16">
+        {json}
+      </pre>
+    </div>
+  )
 }
 
 function VotesTab({ pid }: { pid: number }) {

@@ -241,7 +241,9 @@
       "tally": "Tally",
       "failedReason": "Failed reason",
       "metadataLink": "Metadata:",
-      "noMetadata": "No external metadata for this proposal."
+      "noMetadata": "No external metadata for this proposal.",
+      "jsonCopy": "Copy",
+      "jsonCopied": "Copied ✓"
     },
     "empty": {
       "noProposals": "No proposals match the current filter.",
