@@ -359,7 +359,9 @@
     "unknown": "unknown",
     "like": "Like",
     "dislike": "Dislike",
-    "signInToReact": "Sign in to react"
+    "signInToReact": "Sign in to react",
+    "showReplies": "Show replies ({{n}})",
+    "hideReplies": "Hide replies"
   },
   "newProposal": {
     "back": "Cancel",

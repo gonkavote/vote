@@ -9,11 +9,16 @@ import { TranslatedText, TranslationToggle, type TranslationMode } from './Trans
 import { linkify } from '../lib/linkify'
 import { formatRelative } from '../lib/format'
 
-const MAX_INDENT_LEVEL = 3
-const INDENT_PX = 24
+const COLLAPSE_FROM_DEPTH = 2
 
 export interface CommentTreeNode extends Comment {
   children: CommentTreeNode[]
+}
+
+export function countDescendants(node: CommentTreeNode): number {
+  let n = 0
+  for (const c of node.children) n += 1 + countDescendants(c)
+  return n
 }
 
 export function CommentNode({
@@ -21,6 +26,7 @@ export function CommentNode({
   depth,
   ownerId,
   apiBase,
+  forceExpandIds,
   // legacy alias
   proposalId,
 }: {
@@ -30,6 +36,8 @@ export function CommentNode({
   ownerId?: string
   /** API base for replies, e.g. '/proposal/abc' or '/governance/proposals/42'. */
   apiBase?: string
+  /** Ancestor chain to auto-expand (deep-link into a collapsed reply). */
+  forceExpandIds?: Set<string>
   /** @deprecated kept for the existing ProposalDetail call site. */
   proposalId?: string
 }) {
@@ -41,7 +49,9 @@ export function CommentNode({
   const [showReply, setShowReply] = useState(false)
   const [replyBody, setReplyBody] = useState('')
   const [translationMode, setTranslationMode] = useState<TranslationMode>('translated')
-  const indent = Math.min(depth, MAX_INDENT_LEVEL) * INDENT_PX
+  const shouldCollapse = depth >= COLLAPSE_FROM_DEPTH
+  const isForced = forceExpandIds?.has(comment.id) ?? false
+  const [expanded, setExpanded] = useState(!shouldCollapse || isForced)
 
   const reactionMut = useMutation({
     mutationFn: (next: ReactionType) =>
@@ -109,7 +119,6 @@ export function CommentNode({
   return (
     <div
       id={`comment-${comment.id}`}
-      style={{ marginLeft: indent }}
       className="space-y-2 min-w-[260px] scroll-mt-20"
     >
       <div className="flex gap-3">
@@ -222,8 +231,18 @@ export function CommentNode({
         </div>
       </div>
 
-      {comment.children.length > 0 && (
-        <div className="space-y-3 border-l border-border pl-3 ml-3">
+      {comment.children.length > 0 && shouldCollapse && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="text-xs text-accent hover:underline pl-3"
+        >
+          {t('comments.showReplies', { n: countDescendants(comment) })}
+        </button>
+      )}
+
+      {comment.children.length > 0 && expanded && (
+        <div className="space-y-3 border-l border-border pl-3">
           {comment.children.map((c) => (
             <CommentNode
               key={c.id}
@@ -231,8 +250,18 @@ export function CommentNode({
               depth={depth + 1}
               ownerId={id}
               apiBase={base}
+              forceExpandIds={forceExpandIds}
             />
           ))}
+          {shouldCollapse && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="text-xs text-text-2 hover:text-accent"
+            >
+              {t('comments.hideReplies')}
+            </button>
+          )}
         </div>
       )}
     </div>

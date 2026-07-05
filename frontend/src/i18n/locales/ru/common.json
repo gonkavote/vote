@@ -359,7 +359,9 @@
     "unknown": "неизвестен",
     "like": "Нравится",
     "dislike": "Не нравится",
-    "signInToReact": "Войди, чтобы реагировать"
+    "signInToReact": "Войди, чтобы реагировать",
+    "showReplies": "Показать ответы ({{n}})",
+    "hideReplies": "Скрыть ответы"
   },
   "newProposal": {
     "back": "Отмена",

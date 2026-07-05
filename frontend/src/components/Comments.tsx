@@ -39,6 +39,22 @@ export function Comments({
 
   const tree = useMemo(() => buildCommentTree(comments || []), [comments])
 
+  // Deep-link target: parse #comment-<uuid> from URL and walk parent chain so
+  // collapsed nodes on the path can auto-expand.
+  const forceExpandIds = useMemo(() => {
+    const set = new Set<string>()
+    const hash = loc.hash
+    if (!hash.startsWith('#comment-') || !comments) return set
+    const targetId = hash.slice('#comment-'.length)
+    const byId = new Map(comments.map((c) => [c.id, c]))
+    let cur = byId.get(targetId)
+    while (cur) {
+      set.add(cur.id)
+      cur = cur.parent_comment_id ? byId.get(cur.parent_comment_id) : undefined
+    }
+    return set
+  }, [comments, loc.hash])
+
   // Telegram notifications link to /proposal/{id}#comment-{cid} (and likewise
   // for governance). Once the list is loaded, scroll the target into view and
   // flash a ring around it so the user can find the new reply. Re-run when
@@ -116,7 +132,13 @@ export function Comments({
         )}
         {tree.map((c) => (
           <div key={c.id} className="card overflow-x-auto min-w-0">
-            <CommentNode comment={c} depth={0} ownerId={id} apiBase={base} />
+            <CommentNode
+              comment={c}
+              depth={0}
+              ownerId={id}
+              apiBase={base}
+              forceExpandIds={forceExpandIds}
+            />
           </div>
         ))}
       </div>
