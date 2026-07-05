@@ -27,6 +27,7 @@ export function CommentNode({
   ownerId,
   apiBase,
   forceExpandIds,
+  expandAll,
   // legacy alias
   proposalId,
 }: {
@@ -38,6 +39,9 @@ export function CommentNode({
   apiBase?: string
   /** Ancestor chain to auto-expand (deep-link into a collapsed reply). */
   forceExpandIds?: Set<string>
+  /** When true, this node and all descendants render expanded (used when an
+   *  ancestor's "Show replies" button was clicked). */
+  expandAll?: boolean
   /** @deprecated kept for the existing ProposalDetail call site. */
   proposalId?: string
 }) {
@@ -51,7 +55,9 @@ export function CommentNode({
   const [translationMode, setTranslationMode] = useState<TranslationMode>('translated')
   const shouldCollapse = depth >= COLLAPSE_FROM_DEPTH
   const isForced = forceExpandIds?.has(comment.id) ?? false
-  const [expanded, setExpanded] = useState(!shouldCollapse || isForced)
+  const [localExpanded, setLocalExpanded] = useState(!shouldCollapse || isForced)
+  const expanded = expandAll || localExpanded
+  const setExpanded = setLocalExpanded
 
   const reactionMut = useMutation({
     mutationFn: (next: ReactionType) =>
@@ -251,6 +257,7 @@ export function CommentNode({
               ownerId={id}
               apiBase={base}
               forceExpandIds={forceExpandIds}
+              expandAll={expandAll || (shouldCollapse && localExpanded)}
             />
           ))}
           {shouldCollapse && (
