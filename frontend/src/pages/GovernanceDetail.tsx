@@ -316,13 +316,18 @@ function DetailsTab({ p }: { p: GovProposalDetail }) {
     queryKey: ['gov', 'metadata', p.proposal_id, lng],
     queryFn: () => api.get<GovMetadata>(`/governance/proposals/${p.proposal_id}/metadata`),
   })
+  // `metadata_url` is the canonical link; some proposals only fill `metadata`
+  // with a raw URL instead. Use whichever is a http(s) URL, prefer metadata_url.
+  const rawMeta = (p.metadata || '').trim()
+  const metaAsUrl = /^https?:\/\//i.test(rawMeta) ? rawMeta : ''
+  const externalUrl = p.metadata_url || metaAsUrl
   return (
     <div className="space-y-4">
-      {p.metadata_url && (
+      {externalUrl && (
         <p className="text-text-2 text-xs">
           {t('governance.detail.metadataLink')}{' '}
-          <a href={p.metadata_url} target="_blank" rel="noopener noreferrer"
-             className="text-accent hover:underline break-all">{p.metadata_url}</a>
+          <a href={externalUrl} target="_blank" rel="noopener noreferrer"
+             className="text-accent hover:underline break-all">{externalUrl}</a>
         </p>
       )}
       {isLoading && <p className="text-text-2 text-sm">{t('proposal.loading')}</p>}
@@ -350,9 +355,9 @@ function DetailsTab({ p }: { p: GovProposalDetail }) {
         </>
       )}
       {!isLoading && (!data || !data.markdown) && (
-        p.metadata_url ? (
+        externalUrl ? (
           <a
-            href={p.metadata_url}
+            href={externalUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary inline-flex items-center gap-2"
