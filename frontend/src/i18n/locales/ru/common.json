@@ -242,6 +242,7 @@
       "failedReason": "Причина провала",
       "metadataLink": "Metadata:",
       "noMetadata": "У этого предложения нет внешних метаданных.",
+      "openMetadata": "Открыть ссылку метаданных",
       "jsonCopy": "Копировать",
       "jsonCopied": "Скопировано ✓"
     },

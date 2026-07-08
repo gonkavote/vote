@@ -350,7 +350,23 @@ function DetailsTab({ p }: { p: GovProposalDetail }) {
         </>
       )}
       {!isLoading && (!data || !data.markdown) && (
-        <p className="text-text-2 text-sm">{t('governance.detail.noMetadata')}</p>
+        p.metadata_url ? (
+          <a
+            href={p.metadata_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary inline-flex items-center gap-2"
+          >
+            {t('governance.detail.openMetadata')}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
+        ) : (
+          <p className="text-text-2 text-sm">{t('governance.detail.noMetadata')}</p>
+        )
       )}
     </div>
   )

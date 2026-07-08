@@ -242,6 +242,7 @@
       "failedReason": "Failed reason",
       "metadataLink": "Metadata:",
       "noMetadata": "No external metadata for this proposal.",
+      "openMetadata": "Open metadata link",
       "jsonCopy": "Copy",
       "jsonCopied": "Copied ✓"
     },
