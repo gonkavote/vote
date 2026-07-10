@@ -43,7 +43,7 @@ func Load() (*Config, error) {
 		TrackerAPIURL:          os.Getenv("TRACKER_API_URL"),
 		LinkContractAddress:    os.Getenv("LINK_CONTRACT_ADDRESS"),
 		HTTPTimeout:            envDuration("HTTP_TIMEOUT", 30*time.Second),
-		ScanInterval:           envDuration("SCAN_INTERVAL", 2*time.Minute),
+		ScanInterval:           envDuration("SCAN_INTERVAL", 30*time.Minute),
 		BalanceRefreshInterval: envDuration("BALANCE_REFRESH_INTERVAL", time.Hour),
 		BalanceConcurrency:     envInt("BALANCE_CONCURRENCY", 10),
 		HealthAddr:             env("HEALTH_ADDR", ":8080"),

@@ -176,6 +176,45 @@ type LinkRow struct {
 	Timestamp   time.Time
 }
 
+// FilterNewLinks returns the subset of `in` whose (wallet, account_uid)
+// mapping is NOT already present in wallet_links (as of the latest
+// ReplacingMergeTree snapshot). Prevents the scanner from repeatedly
+// re-inserting the same on-chain link event on every tick — which would
+// overwrite balance_ngonka with 0 between refresher runs.
+func (c *Client) FilterNewLinks(ctx context.Context, in []LinkRow) ([]LinkRow, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	wallets := make([]string, len(in))
+	for i, r := range in {
+		wallets[i] = r.Wallet
+	}
+	rows, err := c.conn.Query(ctx,
+		`SELECT wallet, account_uid FROM gonka_vote.wallet_links FINAL
+		 WHERE wallet IN (?) AND unlinked_at IS NULL`,
+		wallets)
+	if err != nil {
+		return nil, fmt.Errorf("query existing links: %w", err)
+	}
+	defer rows.Close()
+	existing := make(map[string]string)
+	for rows.Next() {
+		var w, uid string
+		if err := rows.Scan(&w, &uid); err != nil {
+			return nil, err
+		}
+		existing[w] = uid
+	}
+	out := in[:0]
+	for _, r := range in {
+		if existing[r.Wallet] == r.AccountUID {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 // UpsertWalletLinks inserts/overwrites (wallet → account_uid) rows.
 // ReplacingMergeTree(updated_at) picks the freshest row per wallet.
 func (c *Client) UpsertWalletLinks(ctx context.Context, rows []LinkRow) error {

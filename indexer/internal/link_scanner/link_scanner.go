@@ -64,9 +64,11 @@ func (s *Scanner) TickOnce(ctx context.Context) {
 		minHeight--
 	}
 
-	hits, err := s.rpc.SearchExecuteContractTxs(ctx, s.cfg.LinkContractAddress, minHeight)
+	hits, err := retryTxSearch(ctx, s.log, func() ([]rpc.TxSearchResult, error) {
+		return s.rpc.SearchExecuteContractTxs(ctx, s.cfg.LinkContractAddress, minHeight)
+	})
 	if err != nil {
-		s.log.Errorw("link tx_search failed", "err", err)
+		s.log.Errorw("link tx_search failed after retries", "err", err)
 		return
 	}
 	if len(hits) == 0 {
@@ -85,10 +87,22 @@ func (s *Scanner) TickOnce(ctx context.Context) {
 	}
 
 	if len(links) > 0 {
-		if err := s.ch.UpsertWalletLinks(ctx, links); err != nil {
-			s.log.Errorw("upsert wallet_links failed", "err", err)
+		// Skip links that already have the same (wallet, account_uid) mapping
+		// stored — otherwise every scan re-inserts a row with balance_ngonka=0
+		// and ReplacingMergeTree wipes the balance until the next refresher
+		// tick. Genuinely new links are still written.
+		fresh, err := s.ch.FilterNewLinks(ctx, links)
+		if err != nil {
+			s.log.Errorw("filter existing links failed", "err", err)
 			return
 		}
+		if len(fresh) > 0 {
+			if err := s.ch.UpsertWalletLinks(ctx, fresh); err != nil {
+				s.log.Errorw("upsert wallet_links failed", "err", err)
+				return
+			}
+		}
+		links = fresh
 	}
 	if len(unlinks) > 0 {
 		if err := s.ch.UnlinkWallets(ctx, unlinks, now); err != nil {
@@ -106,6 +120,31 @@ func (s *Scanner) TickOnce(ctx context.Context) {
 			s.log.Errorw("link checkpoint write failed", "err", err)
 		}
 	}
+}
+
+// retryTxSearch calls fn with exponential backoff (1s, 2s, 4s, 8s, 16s, …),
+// up to 10 attempts. Aborts early if ctx is cancelled.
+func retryTxSearch(ctx context.Context, log *zap.SugaredLogger, fn func() ([]rpc.TxSearchResult, error)) ([]rpc.TxSearchResult, error) {
+	const maxAttempts = 10
+	delay := time.Second
+	var last error
+	for i := 0; i < maxAttempts; i++ {
+		if i > 0 {
+			log.Warnw("tx_search retry", "attempt", i+1, "wait", delay, "prev_err", last)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+			delay *= 2
+		}
+		v, err := fn()
+		if err == nil {
+			return v, nil
+		}
+		last = err
+	}
+	return nil, last
 }
 
 // parseLinkEvents scans a tx's wasm events for our contract and extracts
