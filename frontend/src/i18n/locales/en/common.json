@@ -377,11 +377,6 @@
   },
   "me": {
     "viewPublic": "View public profile →",
-    "rewardWalletLabel": "Reward wallet (optional)",
-    "rewardWalletHint": "If a proposal you create is delivered, the community can choose to send a reward in GNK to this address. We never use it for voting on your behalf.",
-    "save": "Save",
-    "saving": "Saving…",
-    "saved": "✓ Saved",
     "signOut": "Sign out",
     "wallets": {
       "title": "Linked wallets",
@@ -392,6 +387,10 @@
       "loading": "Loading wallets…",
       "empty": "No wallets linked yet.",
       "linkNew": "Link a wallet",
+      "cliTitle": "Or link via CLI",
+      "cliHint": "Run this from any shell with the <code>inferenced</code> binary.",
+      "copy": "Copy command",
+      "copied": "✓ Copied",
       "notConfigured": "Wallet-link contract is not yet configured on this deployment."
     }
   },

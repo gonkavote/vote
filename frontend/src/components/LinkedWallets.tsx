@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { api, LinkedWallet } from '../lib/api'
 import { useAppConfig } from '../lib/useAppConfig'
 import { formatGNK, formatRelative } from '../lib/format'
@@ -11,6 +11,7 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
   const qc = useQueryClient()
   const { data: cfg } = useAppConfig()
   const [wcOp, setWcOp] = useState<WalletConnectOp | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const { data: wallets, isLoading } = useQuery({
     queryKey: ['wallets', 'mine'],
@@ -24,6 +25,26 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
   )
 
   const canLink = !!cfg?.link_contract_address && !!cfg?.wc_project_id
+  const hasContract = !!cfg?.link_contract_address
+
+  const cliCmd = hasContract
+    ? `./inferenced tx wasm execute ${cfg!.link_contract_address} '{"link_account":{"account_uid":"${accountUid}"}}' --from <your-key> --chain-id ${cfg!.chain_id} --keyring-backend file --node ${cfg!.rpc_url}/ -y`
+    : ''
+
+  const cliPretty = hasContract
+    ? `./inferenced tx wasm execute ${cfg!.link_contract_address} \\
+  '{"link_account":{"account_uid":"${accountUid}"}}' \\
+  --from <your-key> --chain-id ${cfg!.chain_id} \\
+  --keyring-backend file \\
+  --node ${cfg!.rpc_url}/ -y`
+    : ''
+
+  const copyCli = async () => {
+    if (!cliCmd) return
+    await navigator.clipboard.writeText(cliCmd)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
 
   return (
     <section className="card space-y-4">
@@ -78,8 +99,29 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
         >
           {t('me.wallets.linkNew')}
         </button>
-      ) : (
+      ) : !hasContract ? (
         <p className="text-xs text-text-2">{t('me.wallets.notConfigured')}</p>
+      ) : null}
+
+      {hasContract && (
+        <div className="border-t border-border pt-4">
+          <p className="text-xs uppercase tracking-wider text-text-2 mb-1">
+            {t('me.wallets.cliTitle')}
+          </p>
+          <p className="text-text-2 text-xs mb-2">
+            <Trans i18nKey="me.wallets.cliHint" components={{ code: <code className="font-mono bg-bg-2 px-1 rounded" /> }} />
+          </p>
+          <pre className="bg-bg-2 border border-border rounded-lg p-3 text-xs overflow-x-auto whitespace-pre">
+            {cliPretty}
+          </pre>
+          <button
+            type="button"
+            onClick={copyCli}
+            className="btn-ghost mt-3 w-full justify-center"
+          >
+            {copied ? t('me.wallets.copied') : t('me.wallets.copy')}
+          </button>
+        </div>
       )}
 
       {wcOp && (
