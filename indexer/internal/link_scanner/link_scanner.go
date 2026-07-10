@@ -37,18 +37,22 @@ func (s *Scanner) Run(ctx context.Context) {
 	ticker := time.NewTicker(s.cfg.ScanInterval)
 	defer ticker.Stop()
 
-	s.tickOnce(ctx)
+	s.TickOnce(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.tickOnce(ctx)
+			s.TickOnce(ctx)
 		}
 	}
 }
 
-func (s *Scanner) tickOnce(ctx context.Context) {
+// TickOnce runs one scan-and-upsert cycle synchronously. Exported so it can
+// be triggered by the manual /refresh HTTP endpoint before the balance
+// refresher runs — that way a wallet that was linked seconds ago is picked
+// up before its balance is queried.
+func (s *Scanner) TickOnce(ctx context.Context) {
 	checkpoint, err := s.ch.GetCheckpoint(ctx, checkpointTask)
 	if err != nil {
 		s.log.Errorw("checkpoint read failed", "err", err)

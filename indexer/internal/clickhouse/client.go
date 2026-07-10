@@ -274,6 +274,27 @@ func (c *Client) ListLinkedWallets(ctx context.Context) ([]LinkedWallet, error) 
 	return out, nil
 }
 
+func (c *Client) ListLinkedWalletsForUID(ctx context.Context, uid string) ([]LinkedWallet, error) {
+	rows, err := c.conn.Query(ctx, `
+		SELECT wallet, account_uid, linked_at
+		FROM gonka_vote.wallet_links FINAL
+		WHERE unlinked_at IS NULL AND account_uid = ?
+	`, uid)
+	if err != nil {
+		return nil, fmt.Errorf("list linked wallets for uid: %w", err)
+	}
+	defer rows.Close()
+	var out []LinkedWallet
+	for rows.Next() {
+		var lw LinkedWallet
+		if err := rows.Scan(&lw.Wallet, &lw.AccountUID, &lw.LinkedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, lw)
+	}
+	return out, nil
+}
+
 // UpsertBalances writes fresh balance snapshots for the given wallets. Uses
 // ListLinkedWallets output to preserve (account_uid, linked_at).
 type BalanceUpdate struct {

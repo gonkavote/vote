@@ -52,7 +52,24 @@ func (r *Refresher) tickOnce(ctx context.Context) {
 	if len(wallets) == 0 {
 		return
 	}
+	r.refreshWallets(ctx, wallets)
+}
 
+// RefreshUID re-fetches balances for every wallet linked to a single
+// account_uid. Used by the manual /refresh HTTP endpoint.
+func (r *Refresher) RefreshUID(ctx context.Context, uid string) (int, error) {
+	wallets, err := r.ch.ListLinkedWalletsForUID(ctx, uid)
+	if err != nil {
+		return 0, err
+	}
+	if len(wallets) == 0 {
+		return 0, nil
+	}
+	r.refreshWallets(ctx, wallets)
+	return len(wallets), nil
+}
+
+func (r *Refresher) refreshWallets(ctx context.Context, wallets []clickhouse.LinkedWallet) {
 	sem := make(chan struct{}, r.cfg.BalanceConcurrency)
 	var wg sync.WaitGroup
 	var mu sync.Mutex

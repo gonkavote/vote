@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     contract_address: str = ""
     link_contract_address: str = ""
 
+    # Internal URL of the indexer's HTTP server (health + /refresh). Used by
+    # the manual wallet-refresh endpoint to trigger a per-user re-scan.
+    indexer_url: str = "http://indexer:8080"
+
     # Public-facing site (REQUIRED).
     # Used to build OAuth redirect, Telegram webhook URL, SSR OG/sitemap URLs.
     public_base_url: str = ""           # e.g. https://vote.example.com

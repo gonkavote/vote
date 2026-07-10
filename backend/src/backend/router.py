@@ -778,6 +778,24 @@ async def my_wallets(user: dict = Depends(current_user)) -> list[LinkedWallet]:
     return [LinkedWallet(**r) for r in rows]
 
 
+@router.post("/wallets/refresh")
+async def refresh_wallets(user: dict = Depends(current_user)) -> dict:
+    """Trigger indexer to scan the link contract and refresh balances for the
+    current user's wallets. Rate-limited to 6 calls/min server-wide by the
+    indexer (returns 429 if exceeded)."""
+    url = f"{settings.indexer_url.rstrip('/')}/refresh"
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, params={"uid": user["uid"]})
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"indexer unreachable: {e}")
+    if resp.status_code == 429:
+        raise HTTPException(status_code=429, detail="rate_limited")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"indexer error: {resp.text}")
+    return resp.json()
+
+
 # ----------------------------------------------------------------------------
 # Public user profile (by uid). Email is intentionally not returned.
 # ----------------------------------------------------------------------------

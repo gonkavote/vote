@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trans, useTranslation } from 'react-i18next'
 import { api, LinkedWallet } from '../lib/api'
 import { useAppConfig } from '../lib/useAppConfig'
@@ -12,6 +12,23 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
   const { data: cfg } = useAppConfig()
   const [wcOp, setWcOp] = useState<WalletConnectOp | null>(null)
   const [copied, setCopied] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+
+  const refresh = useMutation({
+    mutationFn: () => api.post<{ wallets: number }>('/wallets/refresh', {}),
+    onSuccess: () => {
+      setRefreshError(null)
+      qc.invalidateQueries({ queryKey: ['wallets', 'mine'] })
+    },
+    onError: (err: any) => {
+      const status = err?.status
+      if (status === 429) {
+        setRefreshError(t('me.wallets.refreshRateLimited'))
+      } else {
+        setRefreshError(t('me.wallets.refreshFailed'))
+      }
+    },
+  })
 
   const { data: wallets, isLoading } = useQuery({
     queryKey: ['wallets', 'mine'],
@@ -48,15 +65,27 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
 
   return (
     <section className="card space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-lg font-bold">{t('me.wallets.title')}</h2>
-        <span className="text-xs text-text-2">
-          {t('me.wallets.totalWeight')}: <span className="font-bold text-text">{formatGNK(totalWeight.toString(), { integer: true, compactPrecision: 1 })}</span>
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-text-2">
+            {t('me.wallets.totalWeight')}: <span className="font-bold text-text">{formatGNK(totalWeight.toString(), { integer: true, compactPrecision: 1 })}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => refresh.mutate()}
+            disabled={refresh.isPending}
+            className="btn-ghost text-xs px-2 py-1 disabled:opacity-50"
+            title={t('me.wallets.refreshHint')}
+          >
+            {refresh.isPending ? t('me.wallets.refreshing') : t('me.wallets.refresh')}
+          </button>
+        </div>
       </div>
       <p className="text-text-2 text-xs leading-relaxed">
         {t('me.wallets.hint')}
       </p>
+      {refreshError && <p className="text-rose-400 text-xs">{refreshError}</p>}
 
       {isLoading ? (
         <p className="text-text-2 text-sm">{t('me.wallets.loading')}</p>
