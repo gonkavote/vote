@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Markdown } from '../lib/markdown'
+import { ExpandableMarkdown } from '../components/ExpandableMarkdown'
 import { api, ProposalDetail } from '../lib/api'
 import { ReactionStats } from '../components/ReactionStats'
 import { useProposalReaction } from '../components/ProposalReactionButtons'
@@ -160,7 +160,7 @@ export function ProposalDetailPage() {
           isTranslated={proposal.is_translated}
           status={proposal.translation_status}
           mode={translationMode}
-          render={(text) => <Markdown>{text}</Markdown>}
+          render={(text) => <ExpandableMarkdown text={text} />}
         />
 
         <RequestedAndCountdown

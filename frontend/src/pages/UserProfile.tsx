@@ -43,7 +43,7 @@ export function UserProfilePage() {
             {data.name || data.uid}
           </h1>
           <p className="text-text-2 text-sm font-mono">{data.uid}</p>
-          {data.linked_wallets_count > 0 && (
+          {(data.linked_wallets_count ?? 0) > 0 && BigInt(data.total_weight_ngonka || '0') > 0n && (
             <p className="text-text-2 text-xs mt-2 flex items-center flex-wrap gap-x-2">
               <span className="uppercase tracking-wider">{t('profile.totalWeight')}</span>
               <span className="font-bold text-text">

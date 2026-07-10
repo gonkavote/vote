@@ -65,6 +65,9 @@
     "delete": "Delete",
     "deleting": "Deleting…",
     "deleteConfirm": "Delete \"{{title}}\"? This will also remove its comments. This cannot be undone.",
+    "readMore": "Read more",
+    "readLess": "Show less",
+    "hiddenLines": "{{n}} more lines hidden",
     "reactions": {
       "title": "Cast your vote",
       "like": "Like",
