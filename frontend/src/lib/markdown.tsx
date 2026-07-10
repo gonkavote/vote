@@ -21,6 +21,20 @@ export function Markdown({ children }: Props) {
         a: (props: ComponentProps<'a'>) => (
           <a {...props} target="_blank" rel="noopener noreferrer" />
         ),
+        // Wide content — GFM tables, code blocks, images — must scroll inside
+        // its own overflow-x wrapper so it can't push its parent card wider
+        // than the layout allows.
+        table: (props: ComponentProps<'table'>) => (
+          <div className="not-prose overflow-x-auto my-4 -mx-2 px-2 rounded-lg border border-border">
+            <table {...props} className="w-full text-sm border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:px-3 [&_th]:py-2 [&_th]:border-b [&_th]:border-border [&_td]:px-3 [&_td]:py-2 [&_td]:border-b [&_td]:border-border/60" />
+          </div>
+        ),
+        pre: (props: ComponentProps<'pre'>) => (
+          <pre {...props} className="overflow-x-auto" />
+        ),
+        img: (props: ComponentProps<'img'>) => (
+          <img {...props} className="max-w-full h-auto" loading="lazy" />
+        ),
       }}
     >
       {children}

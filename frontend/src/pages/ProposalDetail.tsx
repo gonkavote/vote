@@ -41,10 +41,10 @@ export function ProposalDetailPage() {
       deleteMut.mutate()
     }
   }
-  if (isLoading) return <p className="text-text-2 max-w-[1400px] mx-auto px-5 py-12">{t('proposal.loading')}</p>
+  if (isLoading) return <p className="text-text-2 max-w-[980px] mx-auto px-5 py-12">{t('proposal.loading')}</p>
   if (error || !proposal) {
     return (
-      <div className="max-w-[1400px] mx-auto px-5 py-12">
+      <div className="max-w-[980px] mx-auto px-5 py-12">
         <p className="text-rose-400">{t('proposal.notFound')}</p>
         <Link to="/" className="btn-ghost mt-4 inline-flex">{t('proposal.back2')}</Link>
       </div>
@@ -61,7 +61,7 @@ export function ProposalDetailPage() {
   const effectiveStatus: 'open' | 'closed' = expired ? 'closed' : proposal.status
 
   return (
-    <div className="max-w-[1400px] mx-auto px-5 md:px-12 py-12">
+    <div className="max-w-[980px] mx-auto px-5 md:px-12 py-12">
       <div className="mb-8">
         <Link to="/" className="text-text-2 text-sm hover:text-accent">
           {t('proposal.back')}
@@ -154,7 +154,7 @@ export function ProposalDetailPage() {
       <div className="space-y-8 min-w-0">
         <TranslatedText
           as="article"
-          className="card prose prose-invert prose-sm max-w-none prose-a:text-accent prose-headings:text-text"
+          className="card prose prose-invert prose-sm max-w-none min-w-0 overflow-hidden prose-a:text-accent prose-a:break-words prose-headings:text-text prose-p:break-words"
           translated={proposal.description}
           original={proposal.original_description}
           isTranslated={proposal.is_translated}
