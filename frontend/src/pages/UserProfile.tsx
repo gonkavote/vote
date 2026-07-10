@@ -43,17 +43,15 @@ export function UserProfilePage() {
             {data.name || data.uid}
           </h1>
           <p className="text-text-2 text-sm font-mono">{data.uid}</p>
-          {(data.linked_wallets_count ?? 0) > 0 && BigInt(data.total_weight_ngonka || '0') > 0n && (
-            <p className="text-text-2 text-xs mt-2 flex items-center flex-wrap gap-x-2">
-              <span className="uppercase tracking-wider">{t('profile.totalWeight')}</span>
-              <span className="font-bold text-text">
-                {formatGNK(data.total_weight_ngonka, { integer: true, compactPrecision: 0 })}
-              </span>
-              <span className="text-text-2/70">
-                · {t('profile.linkedWallets', { n: data.linked_wallets_count })}
-              </span>
-            </p>
-          )}
+          <p className="text-text-2 text-xs mt-2 flex items-center flex-wrap gap-x-2">
+            <span className="uppercase tracking-wider">{t('profile.totalWeight')}</span>
+            <span className="font-bold text-text">
+              {formatGNK(data.total_weight_ngonka || '0', { integer: true, compactPrecision: 0 })}
+            </span>
+            <span className="text-text-2/70">
+              · {t('profile.linkedWallets', { n: data.linked_wallets_count ?? 0 })}
+            </span>
+          </p>
         </div>
       </header>
 

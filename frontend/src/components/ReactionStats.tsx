@@ -47,26 +47,28 @@ export function ReactionStats({
 
   if (isInline) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-2">
         {hasRequested && (
-          <div className="rounded-lg bg-bg-2/60 border border-border px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-text-2 mb-0.5">
-              {t('proposal.reactions.requested')}
-            </div>
-            <div className="text-base font-bold text-text">{requestedParts.join(' + ')}</div>
+          <div className="text-xs text-text-2">
+            <span className="uppercase tracking-wider">{t('proposal.reactions.requested')}:</span>{' '}
+            <span className="font-semibold text-text">{requestedParts.join(' + ')}</span>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 py-2">
-            <span className="text-lg leading-none">👍</span>
-            <span className="font-bold text-emerald-400 tabular-nums text-base">{likesCount}</span>
-            <span className="text-text-2 text-xs">· {likesWeight}</span>
-          </div>
-          <div className="flex items-center justify-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/20 py-2">
-            <span className="text-lg leading-none">👎</span>
-            <span className="font-bold text-rose-400 tabular-nums text-base">{dislikesCount}</span>
-            <span className="text-text-2 text-xs">· {dislikesWeight}</span>
-          </div>
+        <div className="flex items-center gap-4 text-xs text-text-2 tabular-nums">
+          <span className="inline-flex items-center gap-1">
+            <span aria-hidden>👍</span>
+            <span>{likesCount}</span>
+            {BigInt(likesWeightNgonka || '0') > 0n && (
+              <span className="text-text-2/70">· {likesWeight}</span>
+            )}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span aria-hidden>👎</span>
+            <span>{dislikesCount}</span>
+            {BigInt(dislikesWeightNgonka || '0') > 0n && (
+              <span className="text-text-2/70">· {dislikesWeight}</span>
+            )}
+          </span>
         </div>
       </div>
     )
