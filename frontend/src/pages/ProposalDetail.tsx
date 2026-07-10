@@ -6,7 +6,7 @@ import { Markdown } from '../lib/markdown'
 import { api, ProposalDetail } from '../lib/api'
 import { useAppConfig } from '../lib/useAppConfig'
 import { ReactionStats } from '../components/ReactionStats'
-import { ProposalReactionButtons } from '../components/ProposalReactionButtons'
+import { ProposalReactionButtons, useProposalReaction } from '../components/ProposalReactionButtons'
 import { Comments } from '../components/Comments'
 import { Avatar } from '../components/Avatar'
 import { CountdownPill, CountdownBig } from '../components/Countdown'
@@ -75,7 +75,7 @@ export function ProposalDetailPage() {
           </div>
         </div>
       )}
-      <ProposalReactionButtons proposalId={proposal.id} lng={lng} />
+      <ProposalReactionButtons proposalId={id || proposal.id} lng={lng} />
       <div className="card text-xs text-text-2 space-y-2 leading-relaxed">
         <p><strong className="text-text">{t('proposal.sidebar.proposalId')}</strong></p>
         <p className="font-mono break-all">{proposal.id}</p>
@@ -199,14 +199,20 @@ export function ProposalDetailPage() {
             render={(text) => <Markdown>{text}</Markdown>}
           />
 
+          <RequestedAmountBlock
+            usdt={proposal.requested_amount_usdt}
+            gnk={proposal.requested_amount_gnk}
+          />
+
           <section className="card">
-            <ReactionStats
+            <ReactionStatsWithReactions
+              proposalId={id || proposal.id}
+              lng={lng}
               likesCount={proposal.likes_count}
               dislikesCount={proposal.dislikes_count}
               likesWeightNgonka={proposal.likes_weight_ngonka}
               dislikesWeightNgonka={proposal.dislikes_weight_ngonka}
-              requestedAmountUsdt={proposal.requested_amount_usdt}
-              requestedAmountGnk={proposal.requested_amount_gnk}
+              myReaction={proposal.my_reaction}
             />
           </section>
 
@@ -219,5 +225,56 @@ export function ProposalDetailPage() {
         <aside className="hidden lg:block">{sidebar}</aside>
       </div>
     </div>
+  )
+}
+
+function fmtRequested(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return n.toLocaleString()
+}
+
+function RequestedAmountBlock({ usdt, gnk }: { usdt: number; gnk: number }) {
+  const { t } = useTranslation()
+  if (usdt <= 0 && gnk <= 0) return null
+  const parts: string[] = []
+  if (usdt > 0) parts.push(`${fmtRequested(usdt)} USDT`)
+  if (gnk > 0) parts.push(`${fmtRequested(gnk)} GNK`)
+  return (
+    <section className="card">
+      <div className="text-[11px] uppercase tracking-wider text-text-2 mb-2">
+        {t('proposal.reactions.requestedAmount')}
+      </div>
+      <div className="text-2xl md:text-3xl font-extrabold">{parts.join(' + ')}</div>
+    </section>
+  )
+}
+
+function ReactionStatsWithReactions({
+  proposalId, lng, likesCount, dislikesCount,
+  likesWeightNgonka, dislikesWeightNgonka, myReaction,
+}: {
+  proposalId: string
+  lng: string
+  likesCount: number
+  dislikesCount: number
+  likesWeightNgonka: string
+  dislikesWeightNgonka: string
+  myReaction: 'like' | 'dislike' | null
+}) {
+  const { toggle, isPending } = useProposalReaction(proposalId, lng)
+  return (
+    <ReactionStats
+      likesCount={likesCount}
+      dislikesCount={dislikesCount}
+      likesWeightNgonka={likesWeightNgonka}
+      dislikesWeightNgonka={dislikesWeightNgonka}
+      requestedAmountUsdt={0}
+      requestedAmountGnk={0}
+      layout="card"
+      onReact={toggle}
+      myReaction={myReaction}
+      reactDisabled={isPending}
+    />
   )
 }

@@ -603,11 +603,12 @@ async def delete_proposal(proposal_id: str, admin: dict = Depends(current_admin)
 @router.get("/proposal/{proposal_id}/comments")
 @router.get("/tenders/{proposal_id}/comments", include_in_schema=False)
 async def list_comments(
-    proposal_id: UUID,
+    proposal_id: str,
     request: Request,
     lang: Optional[str] = None,
 ) -> list[CommentOut]:
     ch = _ensure_ch()
+    canonical = await _resolve_proposal_uuid(ch, proposal_id)
     target_lang = (lang or "").strip().lower()
     me_record = await current_user_optional(request)
     me_uid = me_record["uid"] if me_record else ""
@@ -645,7 +646,7 @@ async def list_comments(
                   - toInt64(countIf(r.reaction_type = 'dislike'))) DESC,
                  c.created_at ASC
         """,
-        {"id": str(proposal_id), "me_uid": me_uid, "lang": target_lang},
+        {"id": str(canonical), "me_uid": me_uid, "lang": target_lang},
     )
     out: list[CommentOut] = []
     for r in rows:
@@ -676,17 +677,12 @@ async def list_comments(
 @router.post("/proposal/{proposal_id}/comments", status_code=201)
 @router.post("/tenders/{proposal_id}/comments", status_code=201, include_in_schema=False)
 async def add_comment(
-    proposal_id: UUID,
+    proposal_id: str,
     payload: CommentCreate,
     user: dict = Depends(current_user),
 ) -> CommentOut:
     ch = _ensure_ch()
-    exists = await ch.query_scalar(
-        "SELECT 1 FROM gonka_vote.proposals FINAL WHERE id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(proposal_id)},
-    )
-    if not exists:
-        raise HTTPException(404, "proposal not found")
+    canonical = await _resolve_proposal_uuid(ch, proposal_id)
 
     if payload.parent_comment_id is not None:
         parent_entity = await ch.query_scalar(
@@ -696,7 +692,7 @@ async def add_comment(
         )
         if parent_entity is None:
             raise HTTPException(404, "parent comment not found")
-        if str(parent_entity) != str(proposal_id):
+        if str(parent_entity) != str(canonical):
             raise HTTPException(400, "parent comment belongs to a different proposal")
 
     cid = uuid4()
@@ -707,7 +703,7 @@ async def add_comment(
         "comments",
         ["id", "entity_id", "author_email", "author_name", "body", "created_at",
          "parent_comment_id", "author_uid", "source_lang"],
-        [[cid, proposal_id, user["email"], user.get("name"), payload.body, now,
+        [[cid, canonical, user["email"], user.get("name"), payload.body, now,
           payload.parent_comment_id, user["uid"], ""]],
     )
     try:
@@ -786,24 +782,17 @@ async def upsert_reaction(
 @router.post("/proposal/{proposal_id}/reactions")
 @router.post("/tenders/{proposal_id}/reactions", include_in_schema=False)
 async def upsert_proposal_reaction(
-    proposal_id: UUID,
+    proposal_id: str,
     payload: ReactionUpsert,
     user: dict = Depends(current_user),
 ) -> dict:
     """Same shape as /comments/{id}/reactions but for proposals."""
     ch = _ensure_ch()
-    exists = await ch.query_scalar(
-        "SELECT 1 FROM gonka_vote.proposals FINAL "
-        "WHERE id = {pid:UUID} AND deleted_at IS NULL LIMIT 1",
-        {"pid": str(proposal_id)},
-    )
-    if not exists:
-        raise HTTPException(404, "proposal not found")
-
+    canonical = await _resolve_proposal_uuid(ch, proposal_id)
     await ch.insert(
         "proposal_reactions",
         ["proposal_id", "reactor_uid", "reaction_type", "updated_at"],
-        [[proposal_id, user["uid"], payload.reaction, datetime.now(timezone.utc)]],
+        [[canonical, user["uid"], payload.reaction, datetime.now(timezone.utc)]],
     )
     return {"ok": True, "reaction": payload.reaction or None}
 

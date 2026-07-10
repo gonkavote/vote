@@ -5,8 +5,7 @@ import { useMe } from '../hooks/useMe'
 import { useLogin } from '../lib/loginContext'
 import { useLocation } from 'react-router-dom'
 
-export function ProposalReactionButtons({ proposalId, lng }: { proposalId: string; lng: string }) {
-  const { t } = useTranslation()
+export function useProposalReaction(proposalId: string, lng: string) {
   const { data: me } = useMe()
   const qc = useQueryClient()
   const loc = useLocation()
@@ -43,7 +42,7 @@ export function ProposalReactionButtons({ proposalId, lng }: { proposalId: strin
     },
   })
 
-  const onClick = (next: 'like' | 'dislike') => {
+  const toggle = (next: 'like' | 'dislike') => {
     if (!me) {
       openLogin(loc.pathname + loc.search)
       return
@@ -53,8 +52,18 @@ export function ProposalReactionButtons({ proposalId, lng }: { proposalId: strin
     mut.mutate(target)
   }
 
+  return { toggle, isPending: mut.isPending, isSignedIn: !!me }
+}
+
+export function ProposalReactionButtons({ proposalId, lng }: { proposalId: string; lng: string }) {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const { toggle, isPending, isSignedIn } = useProposalReaction(proposalId, lng)
   const current = qc.getQueryData<ProposalDetail>(['proposal', proposalId, lng])
   const myReaction = current?.my_reaction
+  const me = { isSignedIn }
+  const mut = { isPending }
+  const onClick = toggle
 
   return (
     <div className="card space-y-3">
@@ -87,7 +96,7 @@ export function ProposalReactionButtons({ proposalId, lng }: { proposalId: strin
           <span className="font-semibold">{t('proposal.reactions.dislike')}</span>
         </button>
       </div>
-      {!me && (
+      {!me.isSignedIn && (
         <div className="text-[11px] text-text-2 text-center">
           {t('proposal.reactions.signInHint')}
         </div>
