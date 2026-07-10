@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatGNK } from '../lib/format'
 import { ReactorsPopover } from './ReactorsPopover'
@@ -129,12 +129,11 @@ function ReactionTile({
   const ring = active ? (isLike ? 'ring-2 ring-emerald-400' : 'ring-2 ring-rose-400') : ''
 
   const Tag = onReact ? 'button' : 'div'
-  const [hovered, setHovered] = useState(false)
+  const [open, setOpen] = useState(false)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const canShowReactors = !!proposalIdForReactors && count > 0
   return (
-    <div
-      className="relative group"
-      onMouseEnter={() => setHovered(true)}
-    >
+    <div className="relative">
       <Tag
         type={onReact ? 'button' : undefined}
         disabled={onReact ? reactDisabled : undefined}
@@ -150,8 +149,34 @@ function ReactionTile({
           <div className="text-sm text-text-2">· {weight}</div>
         </div>
       </Tag>
-      {proposalIdForReactors && count > 0 && hovered && (
-        <ReactorsPopover proposalId={proposalIdForReactors} type={kind} />
+      {canShowReactors && (
+        <>
+          <button
+            ref={toggleRef}
+            type="button"
+            aria-label="Show reactors"
+            aria-expanded={open}
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpen((v) => !v)
+            }}
+            className={`absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-md border border-border ${text} bg-bg-card/80 hover:bg-bg-2 transition`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </button>
+          <ReactorsPopover
+            proposalId={proposalIdForReactors!}
+            type={kind}
+            open={open}
+            onClose={() => setOpen(false)}
+            ignoreRefs={[toggleRef]}
+          />
+        </>
       )}
     </div>
   )

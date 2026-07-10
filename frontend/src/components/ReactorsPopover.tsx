@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
@@ -14,19 +15,57 @@ interface Reactor {
 interface Props {
   proposalId: string
   type: 'like' | 'dislike'
+  open: boolean
+  onClose: () => void
+  /** Refs of elements whose clicks should NOT close the popover
+   *  (typically the toggle button that opened it). */
+  ignoreRefs?: React.RefObject<HTMLElement>[]
 }
 
-export function ReactorsPopover({ proposalId, type }: Props) {
+export function ReactorsPopover({ proposalId, type, open, onClose, ignoreRefs }: Props) {
   const { t } = useTranslation()
+  const ref = useRef<HTMLDivElement>(null)
 
   const { data } = useQuery({
     queryKey: ['reactors', proposalId, type],
     queryFn: () => api.get<Reactor[]>(`/proposal/${proposalId}/reactors?type=${type}`),
+    enabled: open,
     staleTime: 30_000,
   })
 
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node
+      if (ref.current && ref.current.contains(target)) return
+      if (ignoreRefs) {
+        for (const r of ignoreRefs) {
+          if (r.current && r.current.contains(target)) return
+        }
+      }
+      onClose()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('touchstart', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('touchstart', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose, ignoreRefs])
+
+  if (!open) return null
+
   return (
-    <div className="opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity absolute left-1/2 -translate-x-1/2 top-full mt-2 z-40 w-72 max-w-[90vw] rounded-lg border border-border bg-bg-card shadow-2xl p-2">
+    <div
+      ref={ref}
+      role="dialog"
+      className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-40 w-72 max-w-[90vw] rounded-lg border border-border bg-bg-card shadow-2xl p-2"
+    >
       {!data && (
         <p className="text-text-2 text-xs p-3 text-center">{t('proposal.reactors.loading')}</p>
       )}
