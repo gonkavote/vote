@@ -119,6 +119,8 @@ export interface UserPublicProfile {
   name: string | null
   image: string | null
   wallet_address: string | null
+  total_weight_ngonka: string
+  linked_wallets_count: number
   proposals: ProposalSummary[]
 }
 

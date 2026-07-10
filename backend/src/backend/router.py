@@ -863,11 +863,22 @@ async def public_profile(
             "me_uid": me_uid,
         },
     )
+    weight = await ch.query_one(
+        """
+        SELECT toString(sum(balance_ngonka)) AS total,
+               count()                       AS n
+        FROM gonka_vote.wallet_links FINAL
+        WHERE account_uid = {uid:String} AND unlinked_at IS NULL
+        """,
+        {"uid": uid},
+    )
     return UserPublicProfile(
         uid=u["uid"],
         name=u.get("name"),
         image=u.get("image"),
         wallet_address=u.get("wallet_address"),
+        total_weight_ngonka=(weight or {}).get("total") or "0",
+        linked_wallets_count=int((weight or {}).get("n") or 0),
         proposals=[_row_to_summary(r, target_lang) for r in rows],
     )
 

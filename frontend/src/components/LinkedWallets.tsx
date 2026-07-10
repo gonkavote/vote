@@ -124,7 +124,7 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
               contractAddress: cfg!.link_contract_address,
             })
           }
-          className="btn-primary w-full"
+          className="btn-primary w-full justify-center"
         >
           {t('me.wallets.linkNew')}
         </button>

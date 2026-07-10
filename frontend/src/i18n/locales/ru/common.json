@@ -401,7 +401,8 @@
   },
   "profile": {
     "back": "← Все предложения",
-    "wallet": "Кошелёк",
+    "totalWeight": "Суммарный вес",
+    "linkedWallets": "кошельков: {{n}}",
     "proposalsTitle": "Предложения этого пользователя",
     "proposalsCount": "({{n}})",
     "noProposals": "Предложений пока нет.",

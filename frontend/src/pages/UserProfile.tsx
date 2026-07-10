@@ -4,14 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { api, UserPublicProfile } from '../lib/api'
 import { Avatar } from '../components/Avatar'
 import { ReactionStats } from '../components/ReactionStats'
-import { formatRelative } from '../lib/format'
-import { useAppConfig, useTrackerLinks } from '../lib/useAppConfig'
+import { formatGNK, formatRelative } from '../lib/format'
 
 export function UserProfilePage() {
   const { t } = useTranslation()
   const { uid } = useParams<{ uid: string }>()
-  const { data: cfg } = useAppConfig()
-  const trackerLinks = useTrackerLinks(cfg)
   const { data, isLoading, error } = useQuery({
     queryKey: ['user', uid],
     queryFn: () => api.get<UserPublicProfile>(`/users/${uid}`),
@@ -46,23 +43,15 @@ export function UserProfilePage() {
             {data.name || data.uid}
           </h1>
           <p className="text-text-2 text-sm font-mono">{data.uid}</p>
-          {data.wallet_address && (
+          {data.linked_wallets_count > 0 && (
             <p className="text-text-2 text-xs mt-2 flex items-center flex-wrap gap-x-2">
-              <span className="uppercase tracking-wider">{t('profile.wallet')}</span>
-              {trackerLinks.enabled ? (
-                <a
-                  href={trackerLinks.address(data.wallet_address)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-accent hover:underline break-all"
-                >
-                  {data.wallet_address}
-                </a>
-              ) : (
-                <span className="font-mono break-all text-text-2">
-                  {data.wallet_address}
-                </span>
-              )}
+              <span className="uppercase tracking-wider">{t('profile.totalWeight')}</span>
+              <span className="font-bold text-text">
+                {formatGNK(data.total_weight_ngonka, { integer: true, compactPrecision: 1 })}
+              </span>
+              <span className="text-text-2/70">
+                · {t('profile.linkedWallets', { n: data.linked_wallets_count })}
+              </span>
             </p>
           )}
         </div>

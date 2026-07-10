@@ -126,6 +126,8 @@ class UserPublicProfile(BaseModel):
     name: Optional[str] = None
     image: Optional[str] = None
     wallet_address: Optional[str] = None
+    total_weight_ngonka: str = "0"
+    linked_wallets_count: int = 0
     proposals: list[ProposalSummary] = []
 
 

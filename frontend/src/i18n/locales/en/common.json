@@ -401,7 +401,8 @@
   },
   "profile": {
     "back": "← All proposals",
-    "wallet": "Wallet",
+    "totalWeight": "Total weight",
+    "linkedWallets": "{{n}} wallet(s)",
     "proposalsTitle": "Proposals by this user",
     "proposalsCount": "({{n}})",
     "noProposals": "No proposals yet.",
