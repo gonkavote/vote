@@ -113,7 +113,7 @@ export function HomePage() {
         >
           {t('home.hero.titleLine1')} {t('home.hero.titleLine2')}
         </h1>
-        <p className="text-text-2 text-base md:text-lg max-w-[720px] mx-auto leading-relaxed relative">
+        <p className="text-text text-base md:text-lg max-w-[720px] mx-auto leading-relaxed relative">
           <Trans i18nKey="home.hero.subtitle" components={{ strong: <strong className="text-text" /> }} />
         </p>
         {me && (

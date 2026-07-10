@@ -126,7 +126,7 @@ export function ProposalDetailPage() {
               status={proposal.translation_status}
               mode={translationMode}
             />
-            {me?.is_admin && (
+            {(me?.is_admin || (me && me.uid === proposal.creator_uid)) && (
               <button
                 onClick={onDelete}
                 disabled={deleteMut.isPending}

@@ -549,8 +549,9 @@ async def close_proposal(proposal_id: str, user: dict = Depends(current_user)):
 
 @router.delete("/proposal/{proposal_id}")
 @router.delete("/tenders/{proposal_id}", include_in_schema=False)
-async def delete_proposal(proposal_id: str, admin: dict = Depends(current_admin)):
-    """Admin-only soft delete. Cascades to all comments on this proposal."""
+async def delete_proposal(proposal_id: str, user: dict = Depends(current_user)):
+    """Soft delete a proposal. Allowed for the creator or any admin.
+    Cascades to all comments on this proposal."""
     ch = _ensure_ch()
     canonical = await _resolve_proposal_uuid(ch, proposal_id)
     t = await ch.query_one(
@@ -562,6 +563,9 @@ async def delete_proposal(proposal_id: str, admin: dict = Depends(current_admin)
     )
     if not t:
         raise HTTPException(404, "proposal not found")
+
+    if not user.get("is_admin") and t["creator_email"] != user["email"]:
+        raise HTTPException(403, "only the creator or an admin can delete")
 
     now = datetime.now(timezone.utc)
 
@@ -586,7 +590,7 @@ async def delete_proposal(proposal_id: str, admin: dict = Depends(current_admin)
             int(t.get("requested_amount_usdt") or 0),
             int(t.get("requested_amount_gnk") or 0),
             now,
-            admin["email"],
+            user["email"],
         ]],
     )
 
@@ -596,7 +600,7 @@ async def delete_proposal(proposal_id: str, admin: dict = Depends(current_admin)
         "ALTER TABLE gonka_vote.comments "
         "UPDATE deleted_at = now64(3), deleted_by_email = {by:String} "
         "WHERE entity_id = {tid:UUID} AND deleted_at IS NULL",
-        {"by": admin["email"], "tid": str(canonical)},
+        {"by": user["email"], "tid": str(canonical)},
     )
 
     return {"ok": True}
