@@ -78,6 +78,10 @@
       "requestedAmount": "Requested amount",
       "signInHint": "Sign in to like or dislike."
     },
+    "reactors": {
+      "loading": "Loading…",
+      "empty": "No one yet."
+    },
     "sidebar": {
       "proposalId": "Proposal ID",
       "contract": "Contract"

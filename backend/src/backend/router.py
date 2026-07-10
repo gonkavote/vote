@@ -807,6 +807,47 @@ async def upsert_proposal_reaction(
     return {"ok": True, "reaction": payload.reaction or None}
 
 
+@router.get("/proposal/{proposal_id}/reactors")
+async def list_proposal_reactors(
+    proposal_id: str,
+    type: str,
+) -> list[dict]:
+    """List users who reacted with the given type on this proposal. Public.
+    Used by the like/dislike hover popover on the detail page."""
+    if type not in ("like", "dislike"):
+        raise HTTPException(400, "type must be 'like' or 'dislike'")
+    ch = _ensure_ch()
+    canonical = await _resolve_proposal_uuid(ch, proposal_id)
+    rows = await ch.query_rows(
+        """
+        SELECT r.reactor_uid AS uid,
+               COALESCE(u.name, '')  AS name,
+               COALESCE(u.image, '') AS image,
+               toString(COALESCE(w.weight, 0)) AS weight_ngonka
+        FROM gonka_vote.proposal_reactions r FINAL
+        LEFT JOIN gonka_vote.users AS u FINAL ON u.uid = r.reactor_uid
+        LEFT JOIN (
+            SELECT account_uid, sum(balance_ngonka) AS weight
+            FROM gonka_vote.wallet_links FINAL
+            WHERE unlinked_at IS NULL
+            GROUP BY account_uid
+        ) AS w ON w.account_uid = r.reactor_uid
+        WHERE r.proposal_id = {pid:UUID} AND r.reaction_type = {t:String}
+        ORDER BY toUInt256OrZero(toString(COALESCE(w.weight, 0))) DESC, r.updated_at DESC
+        """,
+        {"pid": str(canonical), "t": type},
+    )
+    return [
+        {
+            "uid": r["uid"],
+            "name": r.get("name") or None,
+            "image": r.get("image") or None,
+            "weight_ngonka": r.get("weight_ngonka") or "0",
+        }
+        for r in rows
+    ]
+
+
 # ----------------------------------------------------------------------------
 # Linked wallets — the /me settings page shows which chain wallets the current
 # user has bound via the LinkAccount contract. Indexer populates wallet_links

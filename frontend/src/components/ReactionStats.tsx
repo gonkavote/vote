@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatGNK } from '../lib/format'
+import { ReactorsPopover } from './ReactorsPopover'
 
 interface Props {
   likesCount: number
@@ -14,6 +16,9 @@ interface Props {
   onReact?: (kind: 'like' | 'dislike') => void
   myReaction?: 'like' | 'dislike' | null
   reactDisabled?: boolean
+  /** If provided, hovering a like/dislike tile shows a popover listing users
+   *  who reacted with that type on the given proposal. */
+  proposalIdForReactors?: string
 }
 
 function fmtInt(n: number): string {
@@ -33,6 +38,7 @@ export function ReactionStats({
   onReact,
   myReaction,
   reactDisabled,
+  proposalIdForReactors,
 }: Props) {
   const { t } = useTranslation()
   const isInline = layout === 'inline'
@@ -72,50 +78,81 @@ export function ReactionStats({
     )
   }
 
-  const isLikeActive = myReaction === 'like'
-  const isDislikeActive = myReaction === 'dislike'
-  const Tag = onReact ? 'button' : 'div'
-  const likeExtra = onReact
-    ? `hover:bg-emerald-500/15 transition ${isLikeActive ? 'ring-2 ring-emerald-400' : ''}`
-    : ''
-  const dislikeExtra = onReact
-    ? `hover:bg-rose-500/15 transition ${isDislikeActive ? 'ring-2 ring-rose-400' : ''}`
-    : ''
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Tag
-          type={onReact ? 'button' : undefined}
-          disabled={onReact ? reactDisabled : undefined}
-          onClick={onReact ? () => onReact('like') : undefined}
-          className={`rounded-lg bg-emerald-500/5 border border-emerald-500/20 py-4 px-4 text-left ${likeExtra} ${onReact && reactDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          <div className="flex items-center gap-2 text-emerald-400 text-xs uppercase tracking-wider mb-2">
-            <span className="text-base">👍</span>
-            <span>{t('proposal.reactions.likes')}</span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-3xl font-extrabold text-emerald-400 tabular-nums">{likesCount}</div>
-            <div className="text-sm text-text-2">· {likesWeight}</div>
-          </div>
-        </Tag>
-        <Tag
-          type={onReact ? 'button' : undefined}
-          disabled={onReact ? reactDisabled : undefined}
-          onClick={onReact ? () => onReact('dislike') : undefined}
-          className={`rounded-lg bg-rose-500/5 border border-rose-500/20 py-4 px-4 text-left ${dislikeExtra} ${onReact && reactDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          <div className="flex items-center gap-2 text-rose-400 text-xs uppercase tracking-wider mb-2">
-            <span className="text-base">👎</span>
-            <span>{t('proposal.reactions.dislikes')}</span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-3xl font-extrabold text-rose-400 tabular-nums">{dislikesCount}</div>
-            <div className="text-sm text-text-2">· {dislikesWeight}</div>
-          </div>
-        </Tag>
+        <ReactionTile
+          kind="like"
+          count={likesCount}
+          weight={likesWeight}
+          myReaction={myReaction}
+          onReact={onReact}
+          reactDisabled={reactDisabled}
+          label={t('proposal.reactions.likes')}
+          proposalIdForReactors={proposalIdForReactors}
+        />
+        <ReactionTile
+          kind="dislike"
+          count={dislikesCount}
+          weight={dislikesWeight}
+          myReaction={myReaction}
+          onReact={onReact}
+          reactDisabled={reactDisabled}
+          label={t('proposal.reactions.dislikes')}
+          proposalIdForReactors={proposalIdForReactors}
+        />
       </div>
+    </div>
+  )
+}
+
+function ReactionTile({
+  kind, count, weight, myReaction, onReact, reactDisabled,
+  label, proposalIdForReactors,
+}: {
+  kind: 'like' | 'dislike'
+  count: number
+  weight: string
+  myReaction?: 'like' | 'dislike' | null
+  onReact?: (k: 'like' | 'dislike') => void
+  reactDisabled?: boolean
+  label: string
+  proposalIdForReactors?: string
+}) {
+  const isLike = kind === 'like'
+  const emoji = isLike ? '👍' : '👎'
+  const active = myReaction === kind
+  const bg = isLike ? 'bg-emerald-500/5' : 'bg-rose-500/5'
+  const border = isLike ? 'border-emerald-500/20' : 'border-rose-500/20'
+  const text = isLike ? 'text-emerald-400' : 'text-rose-400'
+  const hoverBg = onReact ? (isLike ? 'hover:bg-emerald-500/15' : 'hover:bg-rose-500/15') : ''
+  const ring = active ? (isLike ? 'ring-2 ring-emerald-400' : 'ring-2 ring-rose-400') : ''
+
+  const Tag = onReact ? 'button' : 'div'
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      className="relative group"
+      onMouseEnter={() => setHovered(true)}
+    >
+      <Tag
+        type={onReact ? 'button' : undefined}
+        disabled={onReact ? reactDisabled : undefined}
+        onClick={onReact ? () => onReact(kind) : undefined}
+        className={`w-full rounded-lg ${bg} border ${border} py-4 px-4 text-left transition ${hoverBg} ${ring} ${onReact && reactDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        <div className={`flex items-center gap-2 ${text} text-xs uppercase tracking-wider mb-2`}>
+          <span className="text-base">{emoji}</span>
+          <span>{label}</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <div className={`text-3xl font-extrabold ${text} tabular-nums`}>{count}</div>
+          <div className="text-sm text-text-2">· {weight}</div>
+        </div>
+      </Tag>
+      {proposalIdForReactors && count > 0 && hovered && (
+        <ReactorsPopover proposalId={proposalIdForReactors} type={kind} />
+      )}
     </div>
   )
 }

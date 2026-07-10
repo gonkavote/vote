@@ -253,6 +253,7 @@ function ReactionStatsWithReactions({
       onReact={toggle}
       myReaction={myReaction}
       reactDisabled={isPending}
+      proposalIdForReactors={proposalId}
     />
   )
 }

@@ -78,6 +78,10 @@
       "requestedAmount": "Запрошенная сумма",
       "signInHint": "Войди, чтобы голосовать."
     },
+    "reactors": {
+      "loading": "Загружаю…",
+      "empty": "Пока никого."
+    },
     "sidebar": {
       "proposalId": "ID предложения",
       "contract": "Контракт"
