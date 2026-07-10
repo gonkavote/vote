@@ -147,7 +147,7 @@ services:
       # Slackbot, Discordbot, …) get routed to FastAPI for /, /proposal/{uuid},
       # /governance and /governance/{id}, where we render real titles +
       # descriptions + body from the DB. Real browsers keep going to the SPA.
-      - "traefik.http.routers.vote-backend-og.rule=Host(`${PUBLIC_HOST:-localhost}`) && PathRegexp(`^/$|^/proposal/[a-fA-F0-9-]{36}$|^/governance(/[0-9]+)?$`) && HeaderRegexp(`User-Agent`, `(?i).*(bot|crawler|spider|facebookexternalhit|telegrambot|whatsapp|slackbot|discordbot|preview|embed|skype|bingpreview|outbrain|pinterest|google|baidu|yandex|duckduckgo|qwant|petalbot|seznambot|applebot).*`)"
+      - "traefik.http.routers.vote-backend-og.rule=Host(`${PUBLIC_HOST:-localhost}`) && PathRegexp(`^/$|^/proposal/([a-fA-F0-9-]{36}|[a-z0-9]{6})$|^/governance(/[0-9]+)?$`) && HeaderRegexp(`User-Agent`, `(?i).*(bot|crawler|spider|facebookexternalhit|telegrambot|whatsapp|slackbot|discordbot|preview|embed|skype|bingpreview|outbrain|pinterest|google|baidu|yandex|duckduckgo|qwant|petalbot|seznambot|applebot).*`)"
       - "traefik.http.routers.vote-backend-og.entrypoints=web"
       - "traefik.http.routers.vote-backend-og.priority=200"
       - "traefik.http.routers.vote-backend-og.service=vote-backend"

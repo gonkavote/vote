@@ -57,14 +57,14 @@ export function ReactionStats({
           </div>
         )}
         <div className="grid grid-cols-2 gap-2">
-          <div className="flex items-center justify-center gap-2 rounded-lg bg-bg-2/60 border border-border py-2">
+          <div className="flex items-center justify-center gap-2 rounded-lg border border-emerald-500/40 py-2">
             <span className="text-lg leading-none">👍</span>
-            <span className="font-bold text-text tabular-nums text-base">{likesCount}</span>
+            <span className="font-bold text-emerald-400 tabular-nums text-base">{likesCount}</span>
             <span className="text-text-2 text-xs">· {likesWeight}</span>
           </div>
-          <div className="flex items-center justify-center gap-2 rounded-lg bg-bg-2/60 border border-border py-2">
+          <div className="flex items-center justify-center gap-2 rounded-lg border border-rose-500/40 py-2">
             <span className="text-lg leading-none">👎</span>
-            <span className="font-bold text-text tabular-nums text-base">{dislikesCount}</span>
+            <span className="font-bold text-rose-400 tabular-nums text-base">{dislikesCount}</span>
             <span className="text-text-2 text-xs">· {dislikesWeight}</span>
           </div>
         </div>
