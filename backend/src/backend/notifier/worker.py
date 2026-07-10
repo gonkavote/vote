@@ -27,6 +27,7 @@ from backend.notifications import (
     mark_user_opted_out,
 )
 from backend.notifier.telegram_client import TelegramError, send_message
+from backend.notifier.email_client import EmailError, send_email
 from backend.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -213,6 +214,60 @@ async def _load_proposal_title(ch: CHClient, pid: int) -> Optional[str]:
     return row["title"] if row else None
 
 
+def _email_subject(kind: str, author_name: Optional[str]) -> str:
+    who = (author_name or "").strip() or "Someone"
+    if kind == "reply_comment":
+        return f"{who} replied to your comment on Gonka Vote"
+    if kind == "top_level_comment":
+        return f"{who} commented on your proposal on Gonka Vote"
+    return "New activity on Gonka Vote"
+
+
+async def _send_email_and_mark(
+    ch: CHClient, job: dict[str, Any], *,
+    email: str, kind: str, text: str,
+) -> None:
+    """Split path from the Telegram send: SMTP has different error semantics
+    (no chat-id / rate-limit codes) so we branch retry vs fail on retryable."""
+    # Reuse the plaintext `text` we already built for TG, but strip the TG-only
+    # "/stop" footer — the email has its own List-Unsubscribe link.
+    body_text = text.replace("Reply /stop to disable notifications.", "").rstrip()
+    # We need the raw link to render as its own button in HTML; the TG
+    # `text` already contains it on its own line, but easier to rebuild.
+    link = build_link(
+        base_url=settings.public_base_url,
+        is_gov=bool(job["is_gov_proposal"]),
+        proposal_id=int(job["proposal_id"]),
+        entity_id=str(job["target_entity_id"]),
+        comment_id=job["source_comment_id"],
+    ) if kind != "gov_proposal_new" else build_proposal_link(
+        base_url=settings.public_base_url, proposal_id=int(job["proposal_id"])
+    )
+    # Trim the link from the plaintext preview (it's redundant with the button).
+    body_text = body_text.replace(link, "").rstrip()
+
+    src = None
+    if kind != "gov_proposal_new":
+        try:
+            src = await _load_comment(ch, job["source_comment_id"])
+        except Exception:
+            pass
+    subject = _email_subject(kind, src.get("author_name") if src else None)
+
+    try:
+        await send_email(to=email, subject=subject, body_text=body_text, link=link)
+        await _mark_done(ch, job)
+        logger.info("sent email notification to %s (kind=%s, key=%s)",
+                    email, kind, job["source_comment_id"])
+    except EmailError as e:
+        if e.retryable:
+            await _mark_failed(ch, job, f"smtp transient: {e.description}")
+        else:
+            await _mark_skipped(ch, job, f"smtp permanent: {e.description}")
+    except Exception as e:
+        await _mark_failed(ch, job, f"unexpected: {e}")
+
+
 async def _process_one(ch: CHClient, job: dict[str, Any]) -> None:
     """Send one notification. Marks the job done / skipped / retried / failed."""
     email = job["recipient_email"]
@@ -256,7 +311,12 @@ async def _process_one(ch: CHClient, job: dict[str, Any]) -> None:
             link=link,
         )
 
-    # 3. Send.
+    # 3. Send — pick channel by chat_id.
+    #    chat_id > 0 → Telegram; chat_id == 0 → SMTP email.
+    if int(job["chat_id"]) == 0:
+        await _send_email_and_mark(ch, job, email=email, kind=kind, text=text)
+        return
+
     try:
         await send_message(int(job["chat_id"]), text)
         await _mark_done(ch, job)

@@ -100,6 +100,14 @@ class Settings(BaseSettings):
     notification_retry_delay_sec: int = 60
     telegram_webhook_secret: str = ""
 
+    # SMTP for email notifications (Gmail app password).
+    smtp_host: str = ""                     # e.g. smtp.gmail.com
+    smtp_port: int = 587
+    smtp_user: str = ""                     # gmail account
+    smtp_password: str = ""                 # app password
+    smtp_from: str = ""                     # display From, defaults to smtp_user
+    unsubscribe_secret: str = ""            # HMAC key for one-click unsub links
+
 
 settings = Settings()
 

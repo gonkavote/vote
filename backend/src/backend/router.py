@@ -71,6 +71,52 @@ async def health():
     return {"ok": ok}
 
 
+@router.get("/unsubscribe")
+async def unsubscribe(email: str, token: str):
+    """One-click email unsubscribe. Linked from every notification email +
+    the RFC 8058 List-Unsubscribe header. Verifies HMAC(email) so a random
+    URL can't opt someone else out."""
+    from fastapi.responses import HTMLResponse
+    from backend.notifier.email_client import verify_unsubscribe_token
+    from backend.notifications import set_user_opt_out
+
+    ok = verify_unsubscribe_token(email, token)
+    ch = _ensure_ch()
+    if ok:
+        try:
+            await set_user_opt_out(ch, email, True)
+        except Exception as e:
+            logger.warning("unsubscribe %s: %s", email, e)
+    site = settings.public_base_url.rstrip("/")
+    msg = (
+        "You have been unsubscribed from all Gonka Vote email notifications."
+        if ok else
+        "This unsubscribe link is invalid or expired."
+    )
+    html = f"""<!doctype html><html><head><meta charset="utf-8"><title>Unsubscribed</title>
+<style>body{{background:#0e0e16;color:#f0f0f5;font-family:-apple-system,sans-serif;padding:48px 24px;text-align:center}}
+a{{color:#3b82f6;text-decoration:none}}</style></head>
+<body><h1 style="font-size:20px;margin:0 0 16px">{msg}</h1>
+<p><a href="{site}">Back to Gonka Vote →</a></p></body></html>"""
+    return HTMLResponse(html, status_code=200 if ok else 400)
+
+
+@router.post("/unsubscribe")
+async def unsubscribe_post(email: str, token: str):
+    """RFC 8058 One-Click POST target — same effect as GET."""
+    from backend.notifier.email_client import verify_unsubscribe_token
+    from backend.notifications import set_user_opt_out
+
+    if not verify_unsubscribe_token(email, token):
+        raise HTTPException(400, "invalid token")
+    ch = _ensure_ch()
+    try:
+        await set_user_opt_out(ch, email, True)
+    except Exception as e:
+        logger.warning("unsubscribe POST %s: %s", email, e)
+    return {"ok": True}
+
+
 @router.get("/config")
 async def public_config():
     # Bot id is the numeric prefix of the bot token (everything before

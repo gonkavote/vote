@@ -126,14 +126,15 @@ async def enqueue_comment_notifications(ch: CHClient, comment_id: UUID) -> None:
         now = datetime.now(timezone.utc)
         to_insert: list[list] = []
         for email, kind in recipients:
-            chat_id = tg_chat_id_from_email(email)
-            if chat_id is None:
-                continue
             if flags.get(email, False):
                 continue
+            chat_id = tg_chat_id_from_email(email)
+            # chat_id == 0 marks this job as an EMAIL notification — the
+            # worker branches on that to pick SMTP instead of Bot API.
+            channel_id = chat_id if chat_id is not None else 0
             to_insert.append([
                 email, kind, comment_id, "pending", 0, "",
-                chat_id, row["entity_id"], is_gov, (pid or 0),
+                channel_id, row["entity_id"], is_gov, (pid or 0),
                 now, None, None, None, now,
             ])
 
