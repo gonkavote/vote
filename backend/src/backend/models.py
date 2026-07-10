@@ -40,6 +40,7 @@ class ProposalCreate(BaseModel):
 
 class ProposalSummary(BaseModel):
     id: UUID
+    short_id: str = ""
     title: str
     summary: str = ""
     creator_uid: str

@@ -49,6 +49,7 @@ export type TranslationStatus = 'ready' | 'pending' | 'failed'
 
 export interface ProposalSummary {
   id: string
+  short_id: string
   title: string
   summary: string
   creator_uid: string

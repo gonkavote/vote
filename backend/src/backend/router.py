@@ -15,10 +15,21 @@ MIN_DEADLINE_DELTA = timedelta(days=7)
 # form before submitting. Without this, every "1 week" submission that takes
 # >0s from preset-click to publish would be rejected.
 DEADLINE_GRACE = timedelta(hours=2)
+import secrets
+import string
 from typing import Optional
 from uuid import UUID, uuid4
 
 import httpx
+
+# 6-char alphanumeric [a-z0-9] short id — 36^6 = ~2.2B combinations. Backend
+# retries on collision. Old proposals keep short_id='' and remain UUID-only.
+SHORT_ID_ALPHABET = string.ascii_lowercase + string.digits
+SHORT_ID_LEN = 6
+
+
+def _generate_short_id() -> str:
+    return "".join(secrets.choice(SHORT_ID_ALPHABET) for _ in range(SHORT_ID_LEN))
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.auth import current_admin, current_user, current_user_optional, _ensure_ch  # type: ignore
@@ -251,6 +262,7 @@ async def list_proposals(
         )
         SELECT
             t.id            AS id,
+            t.short_id      AS short_id,
             t.title         AS title,
             t.summary       AS summary,
             t.source_lang   AS source_lang,
@@ -308,13 +320,27 @@ async def create_proposal(
 
     ch = _ensure_ch()
     new_id = uuid4()
+    short_id = ""
+    for _ in range(10):
+        candidate = _generate_short_id()
+        existing = await ch.query_scalar(
+            "SELECT count() FROM gonka_vote.proposals FINAL "
+            "WHERE short_id = {sid:String}",
+            {"sid": candidate},
+        )
+        if not existing:
+            short_id = candidate
+            break
+    if not short_id:
+        raise HTTPException(500, "could not allocate short_id")
     await ch.insert(
         "proposals",
-        ["id", "title", "summary", "description", "creator_email", "creator_wallet",
-         "status", "created_at", "closes_at", "creator_uid", "source_lang",
-         "requested_amount_usdt", "requested_amount_gnk"],
+        ["id", "short_id", "title", "summary", "description", "creator_email",
+         "creator_wallet", "status", "created_at", "closes_at", "creator_uid",
+         "source_lang", "requested_amount_usdt", "requested_amount_gnk"],
         [[
             new_id,
+            short_id,
             payload.title,
             payload.summary,
             payload.description,
@@ -335,6 +361,7 @@ async def create_proposal(
         logger.warning("enqueue_detect(proposal) failed for %s: %s", new_id, e)
     return ProposalSummary(
         id=new_id,
+        short_id=short_id,
         title=payload.title,
         summary=payload.summary,
         creator_uid=user["uid"],
@@ -350,14 +377,35 @@ async def create_proposal(
     )
 
 
+async def _resolve_proposal_uuid(ch, proposal_id: str) -> UUID:
+    """Accepts either a UUID or a 6-char short_id. Returns the canonical UUID."""
+    try:
+        return UUID(proposal_id)
+    except (ValueError, AttributeError):
+        pass
+    if len(proposal_id) != SHORT_ID_LEN or any(
+        c not in SHORT_ID_ALPHABET for c in proposal_id
+    ):
+        raise HTTPException(404, "proposal not found")
+    row = await ch.query_one(
+        "SELECT id FROM gonka_vote.proposals FINAL "
+        "WHERE short_id = {sid:String} AND deleted_at IS NULL",
+        {"sid": proposal_id},
+    )
+    if not row:
+        raise HTTPException(404, "proposal not found")
+    return UUID(str(row["id"]))
+
+
 @router.get("/proposal/{proposal_id}")
 @router.get("/tenders/{proposal_id}", include_in_schema=False)
 async def get_proposal(
-    proposal_id: UUID,
+    proposal_id: str,
     request: Request,
     lang: Optional[str] = None,
 ) -> ProposalDetail:
     ch = _ensure_ch()
+    canonical = await _resolve_proposal_uuid(ch, proposal_id)
     target_lang = (lang or "").strip().lower()
     me_record = await current_user_optional(request)
     me_uid = me_record["uid"] if me_record else ""
@@ -367,6 +415,7 @@ async def get_proposal(
         {_REACTIONS_CTE.strip().rstrip(',')}
         SELECT
             t.id              AS id,
+            t.short_id        AS short_id,
             t.title           AS title,
             t.summary         AS summary,
             t.description     AS description,
@@ -398,7 +447,7 @@ async def get_proposal(
                   ON ttx.proposal_id = t.id AND ttx.target_lang = {{lang:String}}
         WHERE t.id = {{id:UUID}} AND t.deleted_at IS NULL
         """,
-        {"id": str(proposal_id), "lang": target_lang, "me_uid": me_uid},
+        {"id": str(canonical), "lang": target_lang, "me_uid": me_uid},
     )
     if not t:
         raise HTTPException(404, "proposal not found")
@@ -406,7 +455,7 @@ async def get_proposal(
     comment_count = await ch.query_scalar(
         "SELECT count() FROM gonka_vote.comments "
         "WHERE entity_id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(proposal_id)},
+        {"id": str(canonical)},
     )
 
     source_lang = (t.get("source_lang") or "")
@@ -423,6 +472,7 @@ async def get_proposal(
     is_translated = t_is_t or s_is_t or d_is_t
     return ProposalDetail(
         id=t["id"],
+        short_id=(t.get("short_id") or ""),
         title=title_show,
         summary=summary_show,
         description=desc_show,
@@ -452,14 +502,15 @@ async def get_proposal(
 
 @router.post("/proposal/{proposal_id}/close")
 @router.post("/tenders/{proposal_id}/close", include_in_schema=False)
-async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
+async def close_proposal(proposal_id: str, user: dict = Depends(current_user)):
     ch = _ensure_ch()
+    canonical = await _resolve_proposal_uuid(ch, proposal_id)
     t = await ch.query_one(
-        "SELECT creator_email, status, title, summary, description, created_at, "
+        "SELECT short_id, creator_email, status, title, summary, description, created_at, "
         "closes_at, creator_wallet, creator_uid, requested_amount_usdt, requested_amount_gnk "
         "FROM gonka_vote.proposals FINAL "
         "WHERE id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(proposal_id)},
+        {"id": str(canonical)},
     )
     if not t:
         raise HTTPException(404, "proposal not found")
@@ -468,11 +519,12 @@ async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
 
     await ch.insert(
         "proposals",
-        ["id", "title", "summary", "description", "creator_email", "creator_wallet",
-         "status", "created_at", "closes_at", "creator_uid",
+        ["id", "short_id", "title", "summary", "description", "creator_email",
+         "creator_wallet", "status", "created_at", "closes_at", "creator_uid",
          "requested_amount_usdt", "requested_amount_gnk"],
         [[
-            proposal_id,
+            canonical,
+            t.get("short_id") or "",
             t["title"],
             t.get("summary") or "",
             t["description"],
@@ -491,15 +543,16 @@ async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
 
 @router.delete("/proposal/{proposal_id}")
 @router.delete("/tenders/{proposal_id}", include_in_schema=False)
-async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin)):
+async def delete_proposal(proposal_id: str, admin: dict = Depends(current_admin)):
     """Admin-only soft delete. Cascades to all comments on this proposal."""
     ch = _ensure_ch()
+    canonical = await _resolve_proposal_uuid(ch, proposal_id)
     t = await ch.query_one(
-        "SELECT id, title, summary, description, creator_email, creator_wallet, "
+        "SELECT id, short_id, title, summary, description, creator_email, creator_wallet, "
         "status, created_at, closes_at, creator_uid, requested_amount_usdt, requested_amount_gnk "
         "FROM gonka_vote.proposals FINAL "
         "WHERE id = {id:UUID} AND deleted_at IS NULL",
-        {"id": str(proposal_id)},
+        {"id": str(canonical)},
     )
     if not t:
         raise HTTPException(404, "proposal not found")
@@ -508,12 +561,13 @@ async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin
 
     await ch.insert(
         "proposals",
-        ["id", "title", "summary", "description", "creator_email", "creator_wallet",
-         "status", "created_at", "closes_at", "creator_uid",
+        ["id", "short_id", "title", "summary", "description", "creator_email",
+         "creator_wallet", "status", "created_at", "closes_at", "creator_uid",
          "requested_amount_usdt", "requested_amount_gnk",
          "deleted_at", "deleted_by_email"],
         [[
-            proposal_id,
+            canonical,
+            t.get("short_id") or "",
             t["title"],
             t.get("summary") or "",
             t["description"],
@@ -536,7 +590,7 @@ async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin
         "ALTER TABLE gonka_vote.comments "
         "UPDATE deleted_at = now64(3), deleted_by_email = {by:String} "
         "WHERE entity_id = {tid:UUID} AND deleted_at IS NULL",
-        {"by": admin["email"], "tid": str(proposal_id)},
+        {"by": admin["email"], "tid": str(canonical)},
     )
 
     return {"ok": True}
@@ -828,6 +882,7 @@ async def public_profile(
         {_REACTIONS_CTE.strip().rstrip(',')}
         SELECT
             t.id            AS id,
+            t.short_id      AS short_id,
             t.title         AS title,
             t.summary       AS summary,
             t.source_lang   AS source_lang,
@@ -928,6 +983,7 @@ def _row_to_summary(r: dict, target_lang: str = "") -> ProposalSummary:
     is_translated = title_is_t or summary_is_t
     return ProposalSummary(
         id=r["id"],
+        short_id=(r.get("short_id") or ""),
         title=title_show,
         summary=summary_show,
         creator_uid=(r.get("creator_uid") or ""),

@@ -250,7 +250,7 @@ function ProposalCard({ it, dim }: { it: ProposalSummary; dim?: boolean }) {
   const showOpenBadge = !expired && it.status === 'open'
   return (
     <Link
-      to={`/proposal/${it.id}`}
+      to={`/proposal/${it.short_id || it.id}`}
       className={`card card-hover block ${dim ? 'opacity-80 hover:opacity-100 transition-opacity' : ''}`}
     >
       <div className="flex items-center justify-between mb-3 gap-2">

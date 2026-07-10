@@ -9,6 +9,11 @@ interface Props {
   requestedAmountUsdt: number
   requestedAmountGnk: number
   layout?: 'card' | 'inline'
+  /** When set, renders 👍/👎 as clickable buttons that toggle the current
+   *  user's reaction. Only used in the detail-page card layout. */
+  onReact?: (kind: 'like' | 'dislike') => void
+  myReaction?: 'like' | 'dislike' | null
+  reactDisabled?: boolean
 }
 
 function fmtInt(n: number): string {
@@ -25,12 +30,15 @@ export function ReactionStats({
   requestedAmountUsdt,
   requestedAmountGnk,
   layout = 'card',
+  onReact,
+  myReaction,
+  reactDisabled,
 }: Props) {
   const { t } = useTranslation()
   const isInline = layout === 'inline'
 
-  const likesWeight = formatGNK(likesWeightNgonka, { integer: true, compactPrecision: isInline ? 0 : 1 })
-  const dislikesWeight = formatGNK(dislikesWeightNgonka, { integer: true, compactPrecision: isInline ? 0 : 1 })
+  const likesWeight = formatGNK(likesWeightNgonka, { integer: true, compactPrecision: 0 })
+  const dislikesWeight = formatGNK(dislikesWeightNgonka, { integer: true, compactPrecision: 0 })
 
   const hasRequested = requestedAmountUsdt > 0 || requestedAmountGnk > 0
   const requestedParts: string[] = []
@@ -39,33 +47,50 @@ export function ReactionStats({
 
   if (isInline) {
     return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-3 text-xs">
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
-            <span className="text-base leading-none">👍</span>
-            <span className="font-bold text-emerald-400 tabular-nums">{likesCount}</span>
-            <span className="text-text-2">· {likesWeight}</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5">
-            <span className="text-base leading-none">👎</span>
-            <span className="font-bold text-rose-400 tabular-nums">{dislikesCount}</span>
-            <span className="text-text-2">· {dislikesWeight}</span>
-          </span>
-        </div>
+      <div className="space-y-3">
         {hasRequested && (
-          <div className="text-[11px] text-text-2 flex items-center gap-1">
-            <span className="uppercase tracking-wider">{t('proposal.reactions.requested')}:</span>
-            <span className="font-semibold text-text">{requestedParts.join(' + ')}</span>
+          <div className="rounded-lg bg-bg-2/60 border border-border px-3 py-2">
+            <div className="text-[10px] uppercase tracking-wider text-text-2 mb-0.5">
+              {t('proposal.reactions.requested')}
+            </div>
+            <div className="text-base font-bold text-text">{requestedParts.join(' + ')}</div>
           </div>
         )}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 py-2">
+            <span className="text-lg leading-none">👍</span>
+            <span className="font-bold text-emerald-400 tabular-nums text-base">{likesCount}</span>
+            <span className="text-text-2 text-xs">· {likesWeight}</span>
+          </div>
+          <div className="flex items-center justify-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/20 py-2">
+            <span className="text-lg leading-none">👎</span>
+            <span className="font-bold text-rose-400 tabular-nums text-base">{dislikesCount}</span>
+            <span className="text-text-2 text-xs">· {dislikesWeight}</span>
+          </div>
+        </div>
       </div>
     )
   }
 
+  const isLikeActive = myReaction === 'like'
+  const isDislikeActive = myReaction === 'dislike'
+  const Tag = onReact ? 'button' : 'div'
+  const likeExtra = onReact
+    ? `hover:bg-emerald-500/15 transition ${isLikeActive ? 'ring-2 ring-emerald-400' : ''}`
+    : ''
+  const dislikeExtra = onReact
+    ? `hover:bg-rose-500/15 transition ${isDislikeActive ? 'ring-2 ring-rose-400' : ''}`
+    : ''
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 py-4 px-4">
+        <Tag
+          type={onReact ? 'button' : undefined}
+          disabled={onReact ? reactDisabled : undefined}
+          onClick={onReact ? () => onReact('like') : undefined}
+          className={`rounded-lg bg-emerald-500/5 border border-emerald-500/20 py-4 px-4 text-left ${likeExtra} ${onReact && reactDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
           <div className="flex items-center gap-2 text-emerald-400 text-xs uppercase tracking-wider mb-2">
             <span className="text-base">👍</span>
             <span>{t('proposal.reactions.likes')}</span>
@@ -74,8 +99,13 @@ export function ReactionStats({
             <div className="text-3xl font-extrabold text-emerald-400 tabular-nums">{likesCount}</div>
             <div className="text-sm text-text-2">· {likesWeight}</div>
           </div>
-        </div>
-        <div className="rounded-lg bg-rose-500/5 border border-rose-500/20 py-4 px-4">
+        </Tag>
+        <Tag
+          type={onReact ? 'button' : undefined}
+          disabled={onReact ? reactDisabled : undefined}
+          onClick={onReact ? () => onReact('dislike') : undefined}
+          className={`rounded-lg bg-rose-500/5 border border-rose-500/20 py-4 px-4 text-left ${dislikeExtra} ${onReact && reactDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
           <div className="flex items-center gap-2 text-rose-400 text-xs uppercase tracking-wider mb-2">
             <span className="text-base">👎</span>
             <span>{t('proposal.reactions.dislikes')}</span>
@@ -84,16 +114,8 @@ export function ReactionStats({
             <div className="text-3xl font-extrabold text-rose-400 tabular-nums">{dislikesCount}</div>
             <div className="text-sm text-text-2">· {dislikesWeight}</div>
           </div>
-        </div>
+        </Tag>
       </div>
-      {hasRequested && (
-        <div className="rounded-lg bg-bg-2/60 border border-border py-3 px-4">
-          <div className="text-[11px] uppercase tracking-wider text-text-2 mb-1">
-            {t('proposal.reactions.requestedAmount')}
-          </div>
-          <div className="text-xl font-bold">{requestedParts.join(' + ')}</div>
-        </div>
-      )}
     </div>
   )
 }

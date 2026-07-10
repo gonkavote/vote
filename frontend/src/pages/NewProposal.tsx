@@ -69,7 +69,7 @@ export function NewProposalPage() {
         requested_amount_usdt: usdtNum,
         requested_amount_gnk: gnkNum,
       }),
-    onSuccess: (t) => nav(`/proposal/${t.id}`),
+    onSuccess: (t) => nav(`/proposal/${t.short_id || t.id}`),
   })
 
   const titleLen = title.trim().length

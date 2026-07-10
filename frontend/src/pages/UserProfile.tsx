@@ -47,7 +47,7 @@ export function UserProfilePage() {
             <p className="text-text-2 text-xs mt-2 flex items-center flex-wrap gap-x-2">
               <span className="uppercase tracking-wider">{t('profile.totalWeight')}</span>
               <span className="font-bold text-text">
-                {formatGNK(data.total_weight_ngonka, { integer: true, compactPrecision: 1 })}
+                {formatGNK(data.total_weight_ngonka, { integer: true, compactPrecision: 0 })}
               </span>
               <span className="text-text-2/70">
                 · {t('profile.linkedWallets', { n: data.linked_wallets_count })}
@@ -78,7 +78,7 @@ export function UserProfilePage() {
               return (
               <Link
                 key={it.id}
-                to={`/proposal/${it.id}`}
+                to={`/proposal/${it.short_id || it.id}`}
                 className="card card-hover block"
               >
                 <div className="flex items-center justify-between mb-3 gap-2">

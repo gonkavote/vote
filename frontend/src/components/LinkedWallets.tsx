@@ -69,7 +69,7 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
         <h2 className="text-lg font-bold">{t('me.wallets.title')}</h2>
         <div className="flex items-center gap-3">
           <span className="text-xs text-text-2">
-            {t('me.wallets.totalWeight')}: <span className="font-bold text-text">{formatGNK(totalWeight.toString(), { integer: true, compactPrecision: 1 })}</span>
+            {t('me.wallets.totalWeight')}: <span className="font-bold text-text">{formatGNK(totalWeight.toString(), { integer: true, compactPrecision: 0 })}</span>
           </span>
           <button
             type="button"
@@ -102,7 +102,7 @@ export function LinkedWallets({ accountUid }: { accountUid: string }) {
                 <div className="font-mono text-xs break-all">{w.wallet}</div>
                 <div className="text-[11px] text-text-2 mt-1">
                   {t('me.wallets.balance')}: <span className="font-semibold text-text">
-                    {formatGNK(w.balance_ngonka, { integer: true, compactPrecision: 1 })}
+                    {formatGNK(w.balance_ngonka, { integer: true, compactPrecision: 0 })}
                   </span>
                   {w.balance_refreshed_at && (
                     <> · {t('me.wallets.refreshed', { when: formatRelative(w.balance_refreshed_at) })}</>
