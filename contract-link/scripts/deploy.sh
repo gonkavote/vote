@@ -19,9 +19,9 @@ PASSWORD_FILE="${PASSWORD_FILE:-$REPO_ROOT/forgonka/.keyring_password}"
 FROM_KEY="${FROM_KEY:-personal}"
 NODE="${NODE:-http://node2.gonka.ai:8000/chain-rpc/}"
 CHAIN_ID="${CHAIN_ID:-gonka-mainnet}"
-LABEL="${LABEL:-gonka-vote-v1}"
+LABEL="${LABEL:-gonka-wallet-link-v1}"
 KEYRING_BACKEND="${KEYRING_BACKEND:-file}"
-WASM="$CONTRACT_DIR/artifacts/gonka_tenders.wasm"
+WASM="$CONTRACT_DIR/artifacts/gonka_wallet_link.wasm"
 
 # ----------------------------------------------------------------------------
 # Sanity checks
