@@ -101,19 +101,16 @@ export function HomePage() {
   return (
     <div className="max-w-[1400px] mx-auto px-5 md:px-12 py-12 relative">
       {/* Hero — compact */}
-      <div className="relative text-center pb-8">
-        <span className="pill bg-accent/10 border border-accent/20 text-accent-2 mb-3 relative">
-          {t('home.hero.badge')}
-        </span>
-        <h1 className="text-2xl md:text-3xl font-extrabold leading-tight tracking-tight mb-2 relative">
+      <div className="relative text-center pb-10">
+        <h1 className="text-3xl md:text-5xl font-extrabold leading-tight tracking-tight mb-4 relative whitespace-nowrap md:whitespace-nowrap">
           {t('home.hero.titleLine1')}{' '}
           <span className="grad-text">{t('home.hero.titleLine2')}</span>
         </h1>
-        <p className="text-text-2 text-sm max-w-[560px] mx-auto leading-relaxed relative">
+        <p className="text-text-2 text-base md:text-lg max-w-[720px] mx-auto leading-relaxed relative">
           <Trans i18nKey="home.hero.subtitle" components={{ strong: <strong className="text-text" /> }} />
         </p>
         {me && (
-          <div className="mt-4 relative">
+          <div className="mt-6 relative">
             <Link to="/proposal/new" className="btn-primary">{t('home.hero.propose')}</Link>
           </div>
         )}
