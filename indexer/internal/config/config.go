@@ -12,12 +12,10 @@ type Config struct {
 	RPCURL              string
 	ChainAPIURL         string
 	TrackerAPIURL       string
-	ContractAddress     string
 	LinkContractAddress string
 	HTTPTimeout         time.Duration
 
 	ScanInterval           time.Duration
-	SnapshotInterval       time.Duration
 	BalanceRefreshInterval time.Duration
 	BalanceConcurrency     int
 
@@ -43,11 +41,9 @@ func Load() (*Config, error) {
 		RPCURL:                 os.Getenv("RPC_URL"),
 		ChainAPIURL:            os.Getenv("CHAIN_API_URL"),
 		TrackerAPIURL:          os.Getenv("TRACKER_API_URL"),
-		ContractAddress:        os.Getenv("CONTRACT_ADDRESS"),
 		LinkContractAddress:    os.Getenv("LINK_CONTRACT_ADDRESS"),
 		HTTPTimeout:            envDuration("HTTP_TIMEOUT", 30*time.Second),
 		ScanInterval:           envDuration("SCAN_INTERVAL", 2*time.Minute),
-		SnapshotInterval:       envDuration("SNAPSHOT_INTERVAL", 5*time.Minute),
 		BalanceRefreshInterval: envDuration("BALANCE_REFRESH_INTERVAL", time.Hour),
 		BalanceConcurrency:     envInt("BALANCE_CONCURRENCY", 10),
 		HealthAddr:             env("HEALTH_ADDR", ":8080"),
@@ -67,11 +63,8 @@ func Load() (*Config, error) {
 	if cfg.ChainAPIURL == "" {
 		missing = append(missing, "CHAIN_API_URL")
 	}
-	if cfg.TrackerAPIURL == "" {
-		missing = append(missing, "TRACKER_API_URL")
-	}
-	if cfg.ContractAddress == "" {
-		missing = append(missing, "CONTRACT_ADDRESS")
+	if cfg.LinkContractAddress == "" {
+		missing = append(missing, "LINK_CONTRACT_ADDRESS")
 	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf(

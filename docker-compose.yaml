@@ -58,11 +58,9 @@ services:
     environment:
       - RPC_URL=${RPC_URL:?RPC_URL is required — see .env.template}
       - CHAIN_API_URL=${CHAIN_API_URL:?CHAIN_API_URL is required — see .env.template}
-      - TRACKER_API_URL=${TRACKER_API_URL:?TRACKER_API_URL is required — see .env.template}
-      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:?CONTRACT_ADDRESS is required — see .env.template}
-      - LINK_CONTRACT_ADDRESS=${LINK_CONTRACT_ADDRESS:-}
+      - TRACKER_API_URL=${TRACKER_API_URL:-}
+      - LINK_CONTRACT_ADDRESS=${LINK_CONTRACT_ADDRESS:?LINK_CONTRACT_ADDRESS is required — deploy contract-link and set it}
       - SCAN_INTERVAL=${SCAN_INTERVAL:-2m}
-      - SNAPSHOT_INTERVAL=${SNAPSHOT_INTERVAL:-5m}
       - BALANCE_REFRESH_INTERVAL=${BALANCE_REFRESH_INTERVAL:-1h}
       - BALANCE_CONCURRENCY=${BALANCE_CONCURRENCY:-10}
       - HTTP_TIMEOUT=${HTTP_TIMEOUT:-30s}
@@ -105,8 +103,7 @@ services:
       # needs tx_search support but broadcasts go to a faster node).
       - BACKEND_CHAIN_API_URL=${BACKEND_CHAIN_API_URL:-}
       - BACKEND_RPC_URL=${BACKEND_RPC_URL:-}
-      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:?CONTRACT_ADDRESS is required}
-      - LINK_CONTRACT_ADDRESS=${LINK_CONTRACT_ADDRESS:-}
+      - LINK_CONTRACT_ADDRESS=${LINK_CONTRACT_ADDRESS:?LINK_CONTRACT_ADDRESS is required}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
@@ -118,7 +115,7 @@ services:
       - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-["https://localhost"]}
       - TRANSLATION_LANGUAGES=${TRANSLATION_LANGUAGES:-en,ru}
-      - TRACKER_API_URL=${TRACKER_API_URL:?TRACKER_API_URL is required}
+      - TRACKER_API_URL=${TRACKER_API_URL:-}
       # Tracker UI base ("" disables explorer links in the SPA).
       - TRACKER_UI_URL=${TRACKER_UI_URL:-}
       # WalletConnect projectId from https://cloud.reown.com/
