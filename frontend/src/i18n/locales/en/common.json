@@ -22,7 +22,7 @@
       "badge": "Community-driven · GNK-weighted",
       "titleLine1": "What should Gonka",
       "titleLine2": "build next?",
-      "subtitle": "Propose an idea, discuss it, and signal what would be a fair payout from the <strong>community pool</strong> for implementing it. Grants are weighted by each voter's current GNK balance.",
+      "subtitle": "Propose an idea, discuss it, and let the community react. Votes are weighted by each voter's linked GNK balance.",
       "propose": "+ Create a proposal"
     },
     "list": {
@@ -351,7 +351,7 @@
     "back": "Cancel",
     "signInTitle": "Sign in to create a proposal",
     "title": "Create a proposal",
-    "intro": "Proposals are indicative polls. The community votes with their GNK to signal priority. You can attach a wallet address in your profile to receive a reward if your proposal is delivered.",
+    "intro": "Proposals are indicative polls. The community reacts with 👍 / 👎 to signal priority. Reactions are weighted by each voter's linked GNK balance.",
     "titleField": "Title",
     "titlePlaceholder": "e.g. Add WalletConnect support to the Gonka wallet",
     "summary": "Summary",

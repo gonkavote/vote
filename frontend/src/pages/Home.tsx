@@ -100,27 +100,20 @@ export function HomePage() {
 
   return (
     <div className="max-w-[1400px] mx-auto px-5 md:px-12 py-12 relative">
-      {/* Hero */}
-      <div className="relative text-center pb-16">
-        <div
-          className="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] max-w-full h-[500px] pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse, rgba(59,130,246,0.15) 0%, transparent 70%)' }}
-        />
-        <span className="pill bg-accent/10 border border-accent/20 text-accent-2 mb-6 relative">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
+      {/* Hero — compact */}
+      <div className="relative text-center pb-8">
+        <span className="pill bg-accent/10 border border-accent/20 text-accent-2 mb-3 relative">
           {t('home.hero.badge')}
         </span>
-        <h1 className="text-4xl md:text-6xl font-extrabold leading-tight tracking-tight mb-5 relative">
-          {t('home.hero.titleLine1')} <br />
+        <h1 className="text-2xl md:text-3xl font-extrabold leading-tight tracking-tight mb-2 relative">
+          {t('home.hero.titleLine1')}{' '}
           <span className="grad-text">{t('home.hero.titleLine2')}</span>
         </h1>
-        <p className="text-text-2 text-base md:text-lg max-w-[560px] mx-auto leading-relaxed relative">
+        <p className="text-text-2 text-sm max-w-[560px] mx-auto leading-relaxed relative">
           <Trans i18nKey="home.hero.subtitle" components={{ strong: <strong className="text-text" /> }} />
         </p>
         {me && (
-          <div className="mt-8 relative">
+          <div className="mt-4 relative">
             <Link to="/proposal/new" className="btn-primary">{t('home.hero.propose')}</Link>
           </div>
         )}
