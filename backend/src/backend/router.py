@@ -26,15 +26,14 @@ from backend.lang_detect import supported_languages
 from backend.models import (
     CommentCreate,
     CommentOut,
+    LinkedWallet,
     ProposalCreate,
     ProposalDetail,
     ProposalSummary,
-    ProposalTally,
     ReactionUpsert,
     UserOut,
     UserPublicProfile,
     UserUpdate,
-    VoterEntry,
 )
 from backend.settings import (
     effective_backend_chain_api_url,
@@ -75,6 +74,7 @@ async def public_config():
 
     return {
         "contract_address": settings.contract_address,
+        "link_contract_address": settings.link_contract_address,
         "chain_id": settings.chain_id,
         "rpc_url": effective_backend_rpc_url(),
         # Same-origin HTTPS proxy. The browser would otherwise refuse to
@@ -194,58 +194,54 @@ async def update_me(payload: UserUpdate, user: dict = Depends(current_user)) -> 
 # On-chain wire format still uses `tender_id` for votes — this backend does
 # not touch that; the smart-contract-facing code lives in the indexer.
 
-# --- shared SQL fragments -----------------------------------------------------
-# Community weight = balance + collateral + vesting (legacy weight_ngonka column
-# is already populated with this sum by the indexer; we use it directly).
-# Hosts weight     = network weight × confirmation_poc_ratio (host_weight col).
-# Weighted avg bid uses community weight as the denominator; hosts weight is
-# tracked separately and does not influence the avg today.
-_TALLY_AGG_COLS = """
-    count()                                                              AS voter_count,
-    sum(amount_ngonka)                                                   AS sum_bid,
-    sum(weight_ngonka)                                                   AS community_w,
-    sum(host_weight)                                                     AS hosts_w,
-    if(sum(weight_ngonka) = 0, toUInt256(0),
-       intDiv(sum(toUInt256(amount_ngonka) * toUInt256(weight_ngonka)),
-              toUInt256(sum(weight_ngonka))))                            AS weighted_avg,
-    max(refreshed_at)                                                    AS refreshed_at
-"""
-
-# Per-proposal tally aggregate (single row).
-_TALLY_SQL = f"""
-SELECT
-    {_TALLY_AGG_COLS.replace('AS voter_count', 'AS voter_count').strip()}
-FROM gonka_vote.vote_snapshots FINAL
-WHERE proposal_id = {{pid:String}}
+# Aggregate reactions (like/dislike counts + weighted sums via wallet_links)
+# per-proposal for the requested user. Weight = sum(balance_ngonka) across all
+# active (unlinked_at IS NULL) wallets of the reactor. Users without wallets
+# still count in `*_count` but contribute 0 weight.
+_REACTIONS_CTE = """
+    proposal_reactions_agg AS (
+        WITH uid_weights AS (
+            SELECT account_uid, sum(balance_ngonka) AS weight
+            FROM gonka_vote.wallet_links FINAL
+            WHERE unlinked_at IS NULL
+            GROUP BY account_uid
+        )
+        SELECT
+            r.proposal_id                                              AS proposal_id,
+            countIf(r.reaction_type = 'like')                          AS likes_count,
+            countIf(r.reaction_type = 'dislike')                       AS dislikes_count,
+            toString(sumIf(COALESCE(w.weight, toUInt128(0)),
+                           r.reaction_type = 'like'))                  AS likes_weight,
+            toString(sumIf(COALESCE(w.weight, toUInt128(0)),
+                           r.reaction_type = 'dislike'))               AS dislikes_weight,
+            anyIf(r.reaction_type,
+                  r.reactor_uid = {me_uid:String} AND r.reaction_type != '') AS my_reaction
+        FROM gonka_vote.proposal_reactions AS r FINAL
+        LEFT JOIN uid_weights AS w ON w.account_uid = r.reactor_uid
+        WHERE r.reaction_type != ''
+        GROUP BY r.proposal_id
+    )
 """
 
 
 @router.get("/proposal")
 @router.get("/tenders", include_in_schema=False)
-async def list_proposals(lang: Optional[str] = None) -> list[ProposalSummary]:
+async def list_proposals(
+    request: Request,
+    lang: Optional[str] = None,
+) -> list[ProposalSummary]:
     ch = _ensure_ch()
     target_lang = (lang or "").strip().lower()
+    me_record = await current_user_optional(request)
+    me_uid = me_record["uid"] if me_record else ""
     rows = await ch.query_rows(
-        """
-        WITH proposal_tallies AS (
-            SELECT
-                proposal_id,
-                count()                                          AS voter_count,
-                sum(amount_ngonka)                               AS sum_bid,
-                sum(weight_ngonka)                               AS community_w,
-                sum(host_weight)                                 AS hosts_w,
-                if(sum(weight_ngonka) = 0, toUInt256(0),
-                   intDiv(sum(toUInt256(amount_ngonka) * toUInt256(weight_ngonka)),
-                          toUInt256(sum(weight_ngonka))))        AS weighted_avg,
-                max(refreshed_at)                                AS refreshed_at
-            FROM gonka_vote.vote_snapshots FINAL
-            GROUP BY proposal_id
-        ),
+        f"""
+        WITH
+        {_REACTIONS_CTE.strip().rstrip(',')},
         proposal_jobs AS (
-            -- Job status per proposal for the requested target_lang.
             SELECT entity_id, status
             FROM gonka_vote.translation_jobs FINAL
-            WHERE kind = 'proposal' AND target_lang = {lang:String}
+            WHERE kind = 'proposal' AND target_lang = {{lang:String}}
         ),
         comment_counts AS (
             SELECT entity_id, count() AS cnt
@@ -266,25 +262,26 @@ async def list_proposals(lang: Optional[str] = None) -> list[ProposalSummary]:
             t.status        AS status,
             t.created_at    AS created_at,
             t.closes_at     AS closes_at,
-            COALESCE(tt.voter_count, 0)              AS voter_count,
-            toString(COALESCE(tt.sum_bid, 0))        AS sum_bid,
-            toString(COALESCE(tt.community_w, 0))    AS community_w,
-            toString(COALESCE(tt.hosts_w, 0))        AS hosts_w,
-            toString(COALESCE(tt.weighted_avg, 0))   AS weighted_avg,
-            tt.refreshed_at                          AS refreshed_at,
-            COALESCE(tj.status, '')                  AS job_status,
-            COALESCE(cc.cnt, 0)                      AS comment_count
+            toUInt64(t.requested_amount_usdt) AS requested_amount_usdt,
+            toUInt64(t.requested_amount_gnk)  AS requested_amount_gnk,
+            COALESCE(pr.likes_count, 0)         AS likes_count,
+            COALESCE(pr.dislikes_count, 0)      AS dislikes_count,
+            COALESCE(pr.likes_weight, '0')      AS likes_weight,
+            COALESCE(pr.dislikes_weight, '0')   AS dislikes_weight,
+            COALESCE(pr.my_reaction, '')        AS my_reaction,
+            COALESCE(tj.status, '')             AS job_status,
+            COALESCE(cc.cnt, 0)                 AS comment_count
         FROM gonka_vote.proposals AS t FINAL
         LEFT JOIN gonka_vote.users  AS u  FINAL ON u.email = t.creator_email
-        LEFT JOIN proposal_tallies  AS tt        ON tt.proposal_id = toString(t.id)
+        LEFT JOIN proposal_reactions_agg AS pr  ON pr.proposal_id = t.id
         LEFT JOIN proposal_jobs     AS tj        ON tj.entity_id = t.id
         LEFT JOIN comment_counts    AS cc        ON cc.entity_id = t.id
         LEFT JOIN gonka_vote.proposal_translations AS ttx FINAL
-                  ON ttx.proposal_id = t.id AND ttx.target_lang = {lang:String}
+                  ON ttx.proposal_id = t.id AND ttx.target_lang = {{lang:String}}
         WHERE t.deleted_at IS NULL
         ORDER BY t.created_at DESC
         """,
-        {"lang": target_lang},
+        {"lang": target_lang, "me_uid": me_uid},
     )
     return [_row_to_summary(r, target_lang) for r in rows]
 
@@ -306,17 +303,16 @@ async def create_proposal(
             422,
             f"closes_at must be at least {MIN_DEADLINE_DELTA.days} days from now",
         )
+    if payload.requested_amount_usdt == 0 and payload.requested_amount_gnk == 0:
+        raise HTTPException(422, "at least one of requested_amount_usdt / _gnk must be > 0")
 
     ch = _ensure_ch()
     new_id = uuid4()
-    # We don't try to detect the language here — that's a network call to
-    # Gemini and we want create_proposal to stay fast (<500ms p99). Insert with
-    # source_lang='', enqueue a single 'detect' job; the worker will resolve
-    # source_lang and then enqueue the per-language translation jobs.
     await ch.insert(
         "proposals",
         ["id", "title", "summary", "description", "creator_email", "creator_wallet",
-         "status", "created_at", "closes_at", "creator_uid", "source_lang"],
+         "status", "created_at", "closes_at", "creator_uid", "source_lang",
+         "requested_amount_usdt", "requested_amount_gnk"],
         [[
             new_id,
             payload.title,
@@ -329,6 +325,8 @@ async def create_proposal(
             closes_at,
             user["uid"],
             "",
+            payload.requested_amount_usdt,
+            payload.requested_amount_gnk,
         ]],
     )
     try:
@@ -345,7 +343,8 @@ async def create_proposal(
         status="open",
         created_at=now,
         closes_at=closes_at,
-        tally=ProposalTally(),
+        requested_amount_usdt=payload.requested_amount_usdt,
+        requested_amount_gnk=payload.requested_amount_gnk,
         source_lang="",
         translation_status="pending" if len(supported_languages()) > 1 else "ready",
     )
@@ -353,11 +352,19 @@ async def create_proposal(
 
 @router.get("/proposal/{proposal_id}")
 @router.get("/tenders/{proposal_id}", include_in_schema=False)
-async def get_proposal(proposal_id: UUID, lang: Optional[str] = None) -> ProposalDetail:
+async def get_proposal(
+    proposal_id: UUID,
+    request: Request,
+    lang: Optional[str] = None,
+) -> ProposalDetail:
     ch = _ensure_ch()
     target_lang = (lang or "").strip().lower()
+    me_record = await current_user_optional(request)
+    me_uid = me_record["uid"] if me_record else ""
     t = await ch.query_one(
-        """
+        f"""
+        WITH
+        {_REACTIONS_CTE.strip().rstrip(',')}
         SELECT
             t.id              AS id,
             t.title           AS title,
@@ -374,37 +381,27 @@ async def get_proposal(proposal_id: UUID, lang: Optional[str] = None) -> Proposa
             t.status          AS status,
             t.created_at      AS created_at,
             t.closes_at       AS closes_at,
-            COALESCE(tj.status, '') AS job_status
+            toUInt64(t.requested_amount_usdt) AS requested_amount_usdt,
+            toUInt64(t.requested_amount_gnk)  AS requested_amount_gnk,
+            COALESCE(pr.likes_count, 0)       AS likes_count,
+            COALESCE(pr.dislikes_count, 0)    AS dislikes_count,
+            COALESCE(pr.likes_weight, '0')    AS likes_weight,
+            COALESCE(pr.dislikes_weight, '0') AS dislikes_weight,
+            COALESCE(pr.my_reaction, '')      AS my_reaction,
+            COALESCE(tj.status, '')           AS job_status
         FROM gonka_vote.proposals AS t FINAL
         LEFT JOIN gonka_vote.users AS u FINAL ON u.email = t.creator_email
+        LEFT JOIN proposal_reactions_agg AS pr ON pr.proposal_id = t.id
         LEFT JOIN gonka_vote.translation_jobs AS tj FINAL
-                  ON tj.kind = 'proposal' AND tj.entity_id = t.id AND tj.target_lang = {lang:String}
+                  ON tj.kind = 'proposal' AND tj.entity_id = t.id AND tj.target_lang = {{lang:String}}
         LEFT JOIN gonka_vote.proposal_translations AS ttx FINAL
-                  ON ttx.proposal_id = t.id AND ttx.target_lang = {lang:String}
-        WHERE t.id = {id:UUID} AND t.deleted_at IS NULL
+                  ON ttx.proposal_id = t.id AND ttx.target_lang = {{lang:String}}
+        WHERE t.id = {{id:UUID}} AND t.deleted_at IS NULL
         """,
-        {"id": str(proposal_id), "lang": target_lang},
+        {"id": str(proposal_id), "lang": target_lang, "me_uid": me_uid},
     )
     if not t:
         raise HTTPException(404, "proposal not found")
-
-    tally_row = await ch.query_one(_TALLY_SQL, {"pid": str(proposal_id)})
-    tally = _row_to_tally(tally_row) if tally_row else ProposalTally()
-
-    voters = await ch.query_rows(
-        """
-        SELECT voter,
-               toString(amount_ngonka)  AS amount_ngonka,
-               toString(weight_ngonka)  AS community_weight_ngonka,
-               toString(host_weight)    AS hosts_weight_ngonka,
-               nullIf(tx_hash, '')      AS tx_hash,
-               voted_at                 AS voted_at
-        FROM gonka_vote.vote_snapshots FINAL
-        WHERE proposal_id = {id:String}
-        ORDER BY weight_ngonka DESC, amount_ngonka DESC
-        """,
-        {"id": str(proposal_id)},
-    )
 
     comment_count = await ch.query_scalar(
         "SELECT count() FROM gonka_vote.comments "
@@ -436,8 +433,13 @@ async def get_proposal(proposal_id: UUID, lang: Optional[str] = None) -> Proposa
         status=t["status"],
         created_at=t["created_at"],
         closes_at=t.get("closes_at"),
-        tally=tally,
-        voters=[VoterEntry(**v) for v in voters],
+        requested_amount_usdt=int(t.get("requested_amount_usdt") or 0),
+        requested_amount_gnk=int(t.get("requested_amount_gnk") or 0),
+        likes_count=int(t.get("likes_count") or 0),
+        dislikes_count=int(t.get("dislikes_count") or 0),
+        likes_weight_ngonka=str(t.get("likes_weight") or "0"),
+        dislikes_weight_ngonka=str(t.get("dislikes_weight") or "0"),
+        my_reaction=(t.get("my_reaction") or None) or None,
         comment_count=int(comment_count or 0),
         source_lang=source_lang,
         is_translated=is_translated,
@@ -454,7 +456,7 @@ async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
     ch = _ensure_ch()
     t = await ch.query_one(
         "SELECT creator_email, status, title, summary, description, created_at, "
-        "closes_at, creator_wallet, creator_uid "
+        "closes_at, creator_wallet, creator_uid, requested_amount_usdt, requested_amount_gnk "
         "FROM gonka_vote.proposals FINAL "
         "WHERE id = {id:UUID} AND deleted_at IS NULL",
         {"id": str(proposal_id)},
@@ -467,7 +469,8 @@ async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
     await ch.insert(
         "proposals",
         ["id", "title", "summary", "description", "creator_email", "creator_wallet",
-         "status", "created_at", "closes_at", "creator_uid"],
+         "status", "created_at", "closes_at", "creator_uid",
+         "requested_amount_usdt", "requested_amount_gnk"],
         [[
             proposal_id,
             t["title"],
@@ -479,6 +482,8 @@ async def close_proposal(proposal_id: UUID, user: dict = Depends(current_user)):
             t["created_at"],
             t.get("closes_at"),
             t.get("creator_uid") or user["uid"],
+            int(t.get("requested_amount_usdt") or 0),
+            int(t.get("requested_amount_gnk") or 0),
         ]],
     )
     return {"ok": True}
@@ -491,7 +496,7 @@ async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin
     ch = _ensure_ch()
     t = await ch.query_one(
         "SELECT id, title, summary, description, creator_email, creator_wallet, "
-        "status, created_at, closes_at, creator_uid "
+        "status, created_at, closes_at, creator_uid, requested_amount_usdt, requested_amount_gnk "
         "FROM gonka_vote.proposals FINAL "
         "WHERE id = {id:UUID} AND deleted_at IS NULL",
         {"id": str(proposal_id)},
@@ -501,12 +506,11 @@ async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin
 
     now = datetime.now(timezone.utc)
 
-    # Soft-delete the proposal via ReplacingMergeTree(updated_at) — we re-insert
-    # the full row with deleted_at populated.
     await ch.insert(
         "proposals",
         ["id", "title", "summary", "description", "creator_email", "creator_wallet",
          "status", "created_at", "closes_at", "creator_uid",
+         "requested_amount_usdt", "requested_amount_gnk",
          "deleted_at", "deleted_by_email"],
         [[
             proposal_id,
@@ -519,6 +523,8 @@ async def delete_proposal(proposal_id: UUID, admin: dict = Depends(current_admin
             t["created_at"],
             t.get("closes_at"),
             t.get("creator_uid") or "",
+            int(t.get("requested_amount_usdt") or 0),
+            int(t.get("requested_amount_gnk") or 0),
             now,
             admin["email"],
         ]],
@@ -723,14 +729,69 @@ async def upsert_reaction(
     return {"ok": True, "reaction": payload.reaction or None}
 
 
+@router.post("/proposal/{proposal_id}/reactions")
+@router.post("/tenders/{proposal_id}/reactions", include_in_schema=False)
+async def upsert_proposal_reaction(
+    proposal_id: UUID,
+    payload: ReactionUpsert,
+    user: dict = Depends(current_user),
+) -> dict:
+    """Same shape as /comments/{id}/reactions but for proposals."""
+    ch = _ensure_ch()
+    exists = await ch.query_scalar(
+        "SELECT 1 FROM gonka_vote.proposals FINAL "
+        "WHERE id = {pid:UUID} AND deleted_at IS NULL LIMIT 1",
+        {"pid": str(proposal_id)},
+    )
+    if not exists:
+        raise HTTPException(404, "proposal not found")
+
+    await ch.insert(
+        "proposal_reactions",
+        ["proposal_id", "reactor_uid", "reaction_type", "updated_at"],
+        [[proposal_id, user["uid"], payload.reaction, datetime.now(timezone.utc)]],
+    )
+    return {"ok": True, "reaction": payload.reaction or None}
+
+
+# ----------------------------------------------------------------------------
+# Linked wallets — the /me settings page shows which chain wallets the current
+# user has bound via the LinkAccount contract. Indexer populates wallet_links
+# from on-chain events; balance_refresher refreshes balance_ngonka hourly.
+# ----------------------------------------------------------------------------
+
+@router.get("/wallets/mine")
+async def my_wallets(user: dict = Depends(current_user)) -> list[LinkedWallet]:
+    ch = _ensure_ch()
+    rows = await ch.query_rows(
+        """
+        SELECT wallet,
+               toString(balance_ngonka)   AS balance_ngonka,
+               linked_at                  AS linked_at,
+               balance_refreshed_at       AS balance_refreshed_at
+        FROM gonka_vote.wallet_links FINAL
+        WHERE account_uid = {uid:String} AND unlinked_at IS NULL
+        ORDER BY linked_at DESC
+        """,
+        {"uid": user["uid"]},
+    )
+    return [LinkedWallet(**r) for r in rows]
+
+
 # ----------------------------------------------------------------------------
 # Public user profile (by uid). Email is intentionally not returned.
 # ----------------------------------------------------------------------------
 
 @router.get("/users/{uid}")
-async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProfile:
+async def public_profile(
+    uid: str,
+    request: Request,
+    lang: Optional[str] = None,
+) -> UserPublicProfile:
     ch = _ensure_ch()
     target_lang = (lang or "").strip().lower()
+    me_record = await current_user_optional(request)
+    me_uid = me_record["uid"] if me_record else ""
     u = await ch.query_one(
         """
         SELECT uid, email, name, image, wallet_address
@@ -743,24 +804,10 @@ async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProf
     if not u:
         raise HTTPException(404, "user not found")
 
-    # Proposals: match by either creator_uid (new rows) or creator_email (old rows
-    # that pre-date the uid backfill on the per-row column).
     rows = await ch.query_rows(
-        """
-        WITH proposal_tallies AS (
-            SELECT
-                proposal_id,
-                count()                                          AS voter_count,
-                sum(amount_ngonka)                               AS sum_bid,
-                sum(weight_ngonka)                               AS community_w,
-                sum(host_weight)                                 AS hosts_w,
-                if(sum(weight_ngonka) = 0, toUInt256(0),
-                   intDiv(sum(toUInt256(amount_ngonka) * toUInt256(weight_ngonka)),
-                          toUInt256(sum(weight_ngonka))))        AS weighted_avg,
-                max(refreshed_at)                                AS refreshed_at
-            FROM gonka_vote.vote_snapshots FINAL
-            GROUP BY proposal_id
-        )
+        f"""
+        WITH
+        {_REACTIONS_CTE.strip().rstrip(',')}
         SELECT
             t.id            AS id,
             t.title         AS title,
@@ -768,24 +815,25 @@ async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProf
             t.source_lang   AS source_lang,
             ttx.title       AS title_t,
             ttx.summary     AS summary_t,
-            {uid:String}    AS creator_uid,
-            {name:String}   AS creator_name,
-            {image:String}  AS creator_image,
+            {{uid:String}}    AS creator_uid,
+            {{name:String}}   AS creator_name,
+            {{image:String}}  AS creator_image,
             t.status        AS status,
             t.created_at    AS created_at,
             t.closes_at     AS closes_at,
-            COALESCE(tt.voter_count, 0)              AS voter_count,
-            toString(COALESCE(tt.sum_bid, 0))        AS sum_bid,
-            toString(COALESCE(tt.community_w, 0))    AS community_w,
-            toString(COALESCE(tt.hosts_w, 0))        AS hosts_w,
-            toString(COALESCE(tt.weighted_avg, 0))   AS weighted_avg,
-            tt.refreshed_at                          AS refreshed_at
+            toUInt64(t.requested_amount_usdt) AS requested_amount_usdt,
+            toUInt64(t.requested_amount_gnk)  AS requested_amount_gnk,
+            COALESCE(pr.likes_count, 0)         AS likes_count,
+            COALESCE(pr.dislikes_count, 0)      AS dislikes_count,
+            COALESCE(pr.likes_weight, '0')      AS likes_weight,
+            COALESCE(pr.dislikes_weight, '0')   AS dislikes_weight,
+            COALESCE(pr.my_reaction, '')        AS my_reaction
         FROM gonka_vote.proposals AS t FINAL
-        LEFT JOIN proposal_tallies AS tt ON tt.proposal_id = toString(t.id)
+        LEFT JOIN proposal_reactions_agg AS pr ON pr.proposal_id = t.id
         LEFT JOIN gonka_vote.proposal_translations AS ttx FINAL
-                  ON ttx.proposal_id = t.id AND ttx.target_lang = {lang:String}
+                  ON ttx.proposal_id = t.id AND ttx.target_lang = {{lang:String}}
         WHERE t.deleted_at IS NULL
-          AND (t.creator_email = {email:String} OR t.creator_uid = {uid:String})
+          AND (t.creator_email = {{email:String}} OR t.creator_uid = {{uid:String}})
         ORDER BY t.created_at DESC
         """,
         {
@@ -794,6 +842,7 @@ async def public_profile(uid: str, lang: Optional[str] = None) -> UserPublicProf
             "name": u.get("name") or "",
             "image": u.get("image") or "",
             "lang": target_lang,
+            "me_uid": me_uid,
         },
     )
     return UserPublicProfile(
@@ -858,29 +907,17 @@ def _row_to_summary(r: dict, target_lang: str = "") -> ProposalSummary:
         status=r["status"],
         created_at=r["created_at"],
         closes_at=r.get("closes_at"),
+        requested_amount_usdt=int(r.get("requested_amount_usdt") or 0),
+        requested_amount_gnk=int(r.get("requested_amount_gnk") or 0),
+        likes_count=int(r.get("likes_count") or 0),
+        dislikes_count=int(r.get("dislikes_count") or 0),
+        likes_weight_ngonka=str(r.get("likes_weight") or "0"),
+        dislikes_weight_ngonka=str(r.get("dislikes_weight") or "0"),
+        my_reaction=(r.get("my_reaction") or None) or None,
         comment_count=int(r.get("comment_count") or 0),
         source_lang=source_lang,
         is_translated=is_translated,
         original_title=r["title"] if is_translated else None,
         original_summary=(r.get("summary") or "") if is_translated else None,
         translation_status=t_status,
-        tally=ProposalTally(
-            voter_count=int(r["voter_count"] or 0),
-            sum_bid_ngonka=str(r["sum_bid"] or "0"),
-            community_weight_ngonka=str(r["community_w"] or "0"),
-            hosts_weight_ngonka=str(r["hosts_w"] or "0"),
-            weighted_avg_bid_ngonka=str(r["weighted_avg"] or "0"),
-            refreshed_at=r.get("refreshed_at"),
-        ),
-    )
-
-
-def _row_to_tally(r: dict) -> ProposalTally:
-    return ProposalTally(
-        voter_count=int(r["voter_count"] or 0),
-        sum_bid_ngonka=str(r["sum_bid"] or "0"),
-        community_weight_ngonka=str(r["community_w"] or "0"),
-        hosts_weight_ngonka=str(r["hosts_w"] or "0"),
-        weighted_avg_bid_ngonka=str(r["weighted_avg"] or "0"),
-        refreshed_at=r.get("refreshed_at"),
     )

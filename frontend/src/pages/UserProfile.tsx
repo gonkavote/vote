@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api, UserPublicProfile } from '../lib/api'
 import { Avatar } from '../components/Avatar'
-import { TallyStats } from '../components/TallyStats'
+import { ReactionStats } from '../components/ReactionStats'
 import { formatRelative } from '../lib/format'
 import { useAppConfig, useTrackerLinks } from '../lib/useAppConfig'
 
@@ -122,7 +122,15 @@ export function UserProfilePage() {
                     {it.summary}
                   </p>
                 )}
-                <TallyStats tally={it.tally} layout="inline" />
+                <ReactionStats
+                  likesCount={it.likes_count}
+                  dislikesCount={it.dislikes_count}
+                  likesWeightNgonka={it.likes_weight_ngonka}
+                  dislikesWeightNgonka={it.dislikes_weight_ngonka}
+                  requestedAmountUsdt={it.requested_amount_usdt}
+                  requestedAmountGnk={it.requested_amount_gnk}
+                  layout="inline"
+                />
               </Link>
             )})}
           </div>

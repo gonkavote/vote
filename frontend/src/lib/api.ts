@@ -45,16 +45,6 @@ export const api = {
 // Domain types
 // ---------------------------------------------------------------------------
 
-/** ngonka counts come from the backend as decimal strings (UInt128). */
-export interface Tally {
-  voter_count: number
-  sum_bid_ngonka: string
-  community_weight_ngonka: string
-  hosts_weight_ngonka: string
-  weighted_avg_bid_ngonka: string
-  refreshed_at: string | null
-}
-
 export type TranslationStatus = 'ready' | 'pending' | 'failed'
 
 export interface ProposalSummary {
@@ -67,7 +57,14 @@ export interface ProposalSummary {
   status: 'open' | 'closed'
   created_at: string
   closes_at: string | null
-  tally: Tally
+  requested_amount_usdt: number
+  requested_amount_gnk: number
+  likes_count: number
+  dislikes_count: number
+  /** Sum of `balance_ngonka` across all wallets of everyone who liked. */
+  likes_weight_ngonka: string
+  dislikes_weight_ngonka: string
+  my_reaction: 'like' | 'dislike' | null
   comment_count: number
   source_lang: string
   is_translated: boolean
@@ -76,20 +73,17 @@ export interface ProposalSummary {
   translation_status: TranslationStatus
 }
 
-export interface VoterEntry {
-  voter: string
-  amount_ngonka: string
-  community_weight_ngonka: string
-  hosts_weight_ngonka: string
-  tx_hash: string | null
-  voted_at: string | null
-}
-
 export interface ProposalDetail extends ProposalSummary {
   description: string
   creator_wallet: string | null
-  voters: VoterEntry[]
   original_description?: string | null
+}
+
+export interface LinkedWallet {
+  wallet: string
+  balance_ngonka: string
+  linked_at: string
+  balance_refreshed_at: string | null
 }
 
 export interface Comment {
@@ -130,6 +124,7 @@ export interface UserPublicProfile {
 
 export interface Config {
   contract_address: string
+  link_contract_address: string
   chain_id: string
   rpc_url: string
   rest_url: string

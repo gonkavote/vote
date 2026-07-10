@@ -2,42 +2,36 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
-import { api, Tally, ProposalSummary } from '../lib/api'
-import { TallyStats } from '../components/TallyStats'
+import { api, ProposalSummary } from '../lib/api'
+import { ReactionStats } from '../components/ReactionStats'
 import { CountdownPill } from '../components/Countdown'
 import { formatRelative } from '../lib/format'
 import { useMe } from '../hooks/useMe'
 
 type SortKey =
   | 'newest'
-  | 'voters_desc'    | 'voters_asc'
-  | 'community_desc' | 'community_asc'
-  | 'hosts_desc'     | 'hosts_asc'
-  | 'bid_desc'       | 'bid_asc'
+  | 'most_liked' | 'most_disliked'
+  | 'weight_desc'
+  | 'requested_desc'
 
 const SORT_KEYS: SortKey[] = [
   'newest',
-  'voters_desc', 'voters_asc',
-  'community_desc', 'community_asc',
-  'hosts_desc', 'hosts_asc',
-  'bid_desc', 'bid_asc',
+  'most_liked', 'most_disliked',
+  'weight_desc',
+  'requested_desc',
 ]
 
-/** Numeric value picker so we can sort by any tally column without dupes. */
-function tallyValue(t: Tally, key: SortKey): bigint {
+function sortValue(t: ProposalSummary, key: SortKey): bigint {
   switch (key) {
-    case 'voters_desc':
-    case 'voters_asc':
-      return BigInt(t.voter_count || 0)
-    case 'community_desc':
-    case 'community_asc':
-      return BigInt(t.community_weight_ngonka || '0')
-    case 'hosts_desc':
-    case 'hosts_asc':
-      return BigInt(t.hosts_weight_ngonka || '0')
-    case 'bid_desc':
-    case 'bid_asc':
-      return BigInt(t.weighted_avg_bid_ngonka || '0')
+    case 'most_liked':
+      return BigInt(t.likes_count - t.dislikes_count)
+    case 'most_disliked':
+      return BigInt(t.dislikes_count - t.likes_count)
+    case 'weight_desc':
+      return BigInt(t.likes_weight_ngonka || '0')
+    case 'requested_desc':
+      // combine USDT and GNK — GNK≈$0.10-ish, but for a rough sort just sum.
+      return BigInt(t.requested_amount_usdt) + BigInt(t.requested_amount_gnk)
     default:
       return 0n
   }
@@ -71,12 +65,11 @@ export function HomePage() {
       return (a: ProposalSummary, b: ProposalSummary) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     }
-    const asc = sort.endsWith('_asc')
     return (a: ProposalSummary, b: ProposalSummary) => {
-      const va = tallyValue(a.tally, sort)
-      const vb = tallyValue(b.tally, sort)
+      const va = sortValue(a, sort)
+      const vb = sortValue(b, sort)
       if (va === vb) return 0
-      return asc ? (va < vb ? -1 : 1) : (vb < va ? -1 : 1)
+      return vb < va ? -1 : 1
     }
   }, [sort])
 
@@ -297,7 +290,15 @@ function ProposalCard({ it, dim }: { it: ProposalSummary; dim?: boolean }) {
       {it.summary && (
         <p className="text-text-2 text-[13px] leading-snug mb-4">{it.summary}</p>
       )}
-      <TallyStats tally={it.tally} layout="inline" />
+      <ReactionStats
+        likesCount={it.likes_count}
+        dislikesCount={it.dislikes_count}
+        likesWeightNgonka={it.likes_weight_ngonka}
+        dislikesWeightNgonka={it.dislikes_weight_ngonka}
+        requestedAmountUsdt={it.requested_amount_usdt}
+        requestedAmountGnk={it.requested_amount_gnk}
+        layout="inline"
+      />
     </Link>
   )
 }

@@ -42,14 +42,10 @@
     },
     "sort": {
       "newest": "Newest first",
-      "voters_desc": "Voters — most first",
-      "voters_asc": "Voters — least first",
-      "community_desc": "Community weight ↓",
-      "community_asc": "Community weight ↑",
-      "hosts_desc": "Hosts weight ↓",
-      "hosts_asc": "Hosts weight ↑",
-      "bid_desc": "Avg grant ↓",
-      "bid_asc": "Avg grant ↑"
+      "most_liked": "Most liked",
+      "most_disliked": "Most disliked",
+      "weight_desc": "Most weight",
+      "requested_desc": "Largest request"
     },
     "empty": {
       "noneSignedIn": "No proposals yet.",
@@ -69,35 +65,15 @@
     "delete": "Delete",
     "deleting": "Deleting…",
     "deleteConfirm": "Delete \"{{title}}\"? This will also remove its comments. This cannot be undone.",
-    "tally": {
-      "voters": "Voters",
-      "community": "Community",
-      "communityWeight": "Community weight",
-      "hosts": "Hosts",
-      "hostsWeight": "Hosts weight",
-      "totalBids": "Total bids",
-      "avgBid": "Avg bid",
-      "bid": "Bid",
-      "avgGrant": "Avg grant",
-      "grant": "Grant",
-      "refreshed": "Refreshed {{when}} · re-tallied every minute"
-    },
-    "voters": {
-      "title": "Voters",
-      "address": "Address",
-      "bid": "Bid",
-      "balance": "Balance",
-      "grant": "Grant",
-      "weight": "Balance",
-      "hostsCol": "Hosts",
-      "voted": "Voted",
-      "tx": "Tx",
-      "openTx": "View tx {{hash}} on tracker",
-      "showMore": "Show {{n}} more",
-      "showAll": "Show all",
-      "showLess": "Show less",
-      "showingOf": "Showing {{shown}} of {{total}}",
-      "openTracker": "Open transaction in tracker"
+    "reactions": {
+      "title": "Cast your vote",
+      "like": "Like",
+      "dislike": "Dislike",
+      "likes": "Likes",
+      "dislikes": "Dislikes",
+      "requested": "Requested",
+      "requestedAmount": "Requested amount",
+      "signInHint": "Sign in to like or dislike."
     },
     "sidebar": {
       "proposalId": "Proposal ID",
@@ -381,6 +357,9 @@
     "edit": "Edit",
     "preview": "Preview",
     "previewEmpty": "Nothing to preview yet.",
+    "requestedAmount": "Requested funding",
+    "requestedHint": "(fill USDT, GNK, or both)",
+    "requestedError": "Enter at least one positive integer amount (USDT or GNK).",
     "deadline": "Deadline",
     "deadlineHint": "(min {{days}} days)",
     "deadlineMinError": "Deadline must be at least {{days}} days from now.",

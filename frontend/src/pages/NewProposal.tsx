@@ -40,6 +40,8 @@ export function NewProposalPage() {
   const [description, setDescription] = useState('')
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [closesAt, setClosesAt] = useState<string>(() => presetValue(7))
+  const [requestedUsdt, setRequestedUsdt] = useState<string>('')
+  const [requestedGnk, setRequestedGnk] = useState<string>('')
 
   const minLocal = useMemo(() => {
     const d = new Date()
@@ -51,14 +53,21 @@ export function NewProposalPage() {
   const minMs = new Date(minLocal).getTime()
   const deadlineValid = !Number.isNaN(closesAtMs) && closesAtMs >= minMs - 60_000
 
+  const usdtNum = parseInt(requestedUsdt || '0', 10)
+  const gnkNum = parseInt(requestedGnk || '0', 10)
+  const usdtValid = !Number.isNaN(usdtNum) && usdtNum >= 0 && usdtNum <= 1_000_000_000_000
+  const gnkValid = !Number.isNaN(gnkNum) && gnkNum >= 0 && gnkNum <= 1_000_000_000_000
+  const amountValid = usdtValid && gnkValid && (usdtNum > 0 || gnkNum > 0)
+
   const create = useMutation({
     mutationFn: () =>
       api.post<ProposalSummary>('/proposal', {
         title: title.trim(),
         summary: summary.trim(),
         description: description.trim(),
-        // datetime-local has no timezone; treat as local and convert to UTC ISO.
         closes_at: new Date(closesAt).toISOString(),
+        requested_amount_usdt: usdtNum,
+        requested_amount_gnk: gnkNum,
       }),
     onSuccess: (t) => nav(`/proposal/${t.id}`),
   })
@@ -72,7 +81,7 @@ export function NewProposalPage() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!titleValid || !summaryValid || !descValid || !deadlineValid) return
+    if (!titleValid || !summaryValid || !descValid || !deadlineValid || !amountValid) return
     create.mutate()
   }
 
@@ -81,7 +90,7 @@ export function NewProposalPage() {
     return <NotSignedIn />
   }
 
-  const formIncomplete = !titleValid || !summaryValid || !descValid || !deadlineValid
+  const formIncomplete = !titleValid || !summaryValid || !descValid || !deadlineValid || !amountValid
 
   return (
     <div className="max-w-[760px] mx-auto px-5 md:px-12 py-12">
@@ -174,6 +183,42 @@ export function NewProposalPage() {
                 <p className="text-text-2">{t('newProposal.previewEmpty')}</p>
               )}
             </div>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-sm font-semibold">{t('newProposal.requestedAmount')}</span>
+            <span className="text-xs text-text-2">{t('newProposal.requestedHint')}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs text-text-2 mb-1 block">USDT</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={requestedUsdt}
+                onChange={(e) => setRequestedUsdt(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="0"
+                className="w-full bg-bg-2 border border-border rounded-lg p-3 text-sm focus:outline-none focus:border-accent/50"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs text-text-2 mb-1 block">GNK</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={requestedGnk}
+                onChange={(e) => setRequestedGnk(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="0"
+                className="w-full bg-bg-2 border border-border rounded-lg p-3 text-sm focus:outline-none focus:border-accent/50"
+              />
+            </label>
+          </div>
+          {!amountValid && (requestedUsdt !== '' || requestedGnk !== '') && (
+            <p className="text-rose-400 text-xs mt-1">{t('newProposal.requestedError')}</p>
           )}
         </div>
 

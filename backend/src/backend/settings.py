@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     backend_rpc_url: str = ""           # exposed in /api/config for the SPA's
                                         # CLI hint ("--node <url>")
     contract_address: str = ""
+    link_contract_address: str = ""
 
     # Public-facing site (REQUIRED).
     # Used to build OAuth redirect, Telegram webhook URL, SSR OG/sitemap URLs.

@@ -42,14 +42,10 @@
     },
     "sort": {
       "newest": "Сначала новые",
-      "voters_desc": "Голосов — больше",
-      "voters_asc": "Голосов — меньше",
-      "community_desc": "Вес комьюнити ↓",
-      "community_asc": "Вес комьюнити ↑",
-      "hosts_desc": "Вес хостов ↓",
-      "hosts_asc": "Вес хостов ↑",
-      "bid_desc": "Средний грант ↓",
-      "bid_asc": "Средний грант ↑"
+      "most_liked": "Больше лайков",
+      "most_disliked": "Больше дизлайков",
+      "weight_desc": "Больше веса",
+      "requested_desc": "Крупнее запрос"
     },
     "empty": {
       "noneSignedIn": "Предложений пока нет.",
@@ -69,35 +65,15 @@
     "delete": "Удалить",
     "deleting": "Удаление…",
     "deleteConfirm": "Удалить «{{title}}»? Комментарии тоже исчезнут. Это нельзя отменить.",
-    "tally": {
-      "voters": "Голосов",
-      "community": "Комьюнити",
-      "communityWeight": "Вес комьюнити",
-      "hosts": "Хосты",
-      "hostsWeight": "Вес хостов",
-      "totalBids": "Сумма ставок",
-      "avgBid": "Средняя ставка",
-      "bid": "Ставка",
-      "avgGrant": "Средний грант",
-      "grant": "Грант",
-      "refreshed": "Обновлено {{when}} · пересчёт каждую минуту"
-    },
-    "voters": {
-      "title": "Проголосовавшие",
-      "address": "Адрес",
-      "bid": "Ставка",
-      "balance": "Баланс",
-      "grant": "Грант",
-      "weight": "Баланс",
-      "hostsCol": "Хосты",
-      "voted": "Когда",
-      "tx": "Tx",
-      "openTx": "Открыть транзакцию {{hash}} в трекере",
-      "showMore": "Ещё {{n}}",
-      "showAll": "Показать все",
-      "showLess": "Свернуть",
-      "showingOf": "Показано {{shown}} из {{total}}",
-      "openTracker": "Открыть транзакцию в трекере"
+    "reactions": {
+      "title": "Твой голос",
+      "like": "Нравится",
+      "dislike": "Не нравится",
+      "likes": "Лайки",
+      "dislikes": "Дизлайки",
+      "requested": "Запрошено",
+      "requestedAmount": "Запрошенная сумма",
+      "signInHint": "Войди, чтобы голосовать."
     },
     "sidebar": {
       "proposalId": "ID предложения",
@@ -381,6 +357,9 @@
     "edit": "Редактировать",
     "preview": "Превью",
     "previewEmpty": "Пока нечего показывать.",
+    "requestedAmount": "Запрашиваемая сумма",
+    "requestedHint": "(заполни USDT, GNK или оба)",
+    "requestedError": "Введи положительное целое число хотя бы в одном поле (USDT или GNK).",
     "deadline": "Дедлайн",
     "deadlineHint": "(минимум {{days}} дней)",
     "deadlineMinError": "Дедлайн должен быть хотя бы через {{days}} дней.",

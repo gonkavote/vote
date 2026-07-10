@@ -34,30 +34,8 @@ class ProposalCreate(BaseModel):
     summary: str = Field(min_length=10, max_length=200)
     description: str = Field(min_length=1, max_length=20_000)
     closes_at: Optional[datetime] = None
-
-
-class ProposalTally(BaseModel):
-    """All ngonka amounts as decimal strings (UInt128 doesn't fit in JSON int).
-
-    `community_weight_ngonka` = Σᵢ (balance + collateral + vesting)ᵢ
-    `hosts_weight_ngonka`     = Σᵢ (network weight × confirmation_poc_ratio)ᵢ
-    `weighted_avg_bid_ngonka` = Σ(bid × community_weight) / Σ community_weight
-    """
-    voter_count: int = 0
-    sum_bid_ngonka: str = "0"
-    community_weight_ngonka: str = "0"
-    hosts_weight_ngonka: str = "0"
-    weighted_avg_bid_ngonka: str = "0"
-    refreshed_at: Optional[UtcDateTime] = None
-
-
-class VoterEntry(BaseModel):
-    voter: str
-    amount_ngonka: str
-    community_weight_ngonka: str
-    hosts_weight_ngonka: str
-    tx_hash: Optional[str] = None
-    voted_at: Optional[UtcDateTime] = None
+    requested_amount_usdt: int = Field(default=0, ge=0, le=1_000_000_000_000)
+    requested_amount_gnk: int = Field(default=0, ge=0, le=1_000_000_000_000)
 
 
 class ProposalSummary(BaseModel):
@@ -70,25 +48,32 @@ class ProposalSummary(BaseModel):
     status: str
     created_at: UtcDateTime
     closes_at: Optional[UtcDateTime] = None
-    tally: ProposalTally
+    requested_amount_usdt: int = 0
+    requested_amount_gnk: int = 0
+    likes_count: int = 0
+    dislikes_count: int = 0
+    likes_weight_ngonka: str = "0"
+    dislikes_weight_ngonka: str = "0"
+    my_reaction: Optional[str] = None  # 'like' | 'dislike' | None
     comment_count: int = 0
-    # Detected source language of title/summary/description.
     source_lang: str = ""
-    # True when title/summary in this response are translated (lang ≠ source).
-    # When False, original_* fields are absent.
     is_translated: bool = False
     original_title: Optional[str] = None
     original_summary: Optional[str] = None
-    # 'ready' | 'pending' | 'failed' — for the requested lang.
-    # 'pending' tells the UI to render a "translating…" pill.
     translation_status: str = "ready"
 
 
 class ProposalDetail(ProposalSummary):
     description: str
     creator_wallet: Optional[str] = None
-    voters: list[VoterEntry] = []
     original_description: Optional[str] = None
+
+
+class LinkedWallet(BaseModel):
+    wallet: str
+    balance_ngonka: str = "0"
+    linked_at: UtcDateTime
+    balance_refreshed_at: Optional[UtcDateTime] = None
 
 
 # ----------------------------------------------------------------------------
