@@ -4,9 +4,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Markdown } from '../lib/markdown'
 import { api, ProposalDetail } from '../lib/api'
-import { useAppConfig } from '../lib/useAppConfig'
 import { ReactionStats } from '../components/ReactionStats'
-import { ProposalReactionButtons, useProposalReaction } from '../components/ProposalReactionButtons'
+import { useProposalReaction } from '../components/ProposalReactionButtons'
 import { Comments } from '../components/Comments'
 import { Avatar } from '../components/Avatar'
 import { CountdownPill, CountdownBig } from '../components/Countdown'
@@ -42,8 +41,6 @@ export function ProposalDetailPage() {
       deleteMut.mutate()
     }
   }
-  const { data: config } = useAppConfig()
-
   if (isLoading) return <p className="text-text-2 max-w-[1400px] mx-auto px-5 py-12">{t('proposal.loading')}</p>
   if (error || !proposal) {
     return (
@@ -63,32 +60,6 @@ export function ProposalDetailPage() {
   const showOpenBadge = !closed && !expired
   const effectiveStatus: 'open' | 'closed' = expired ? 'closed' : proposal.status
 
-  // Sidebar contents — re-used in two slots: between description-area and
-  // comments on mobile, and as the right column on desktop.
-  const sidebar = (
-    <div className="space-y-4">
-      {proposal.closes_at && (
-        <div className="card">
-          <CountdownBig closesAt={proposal.closes_at} status={proposal.status} />
-          <div className="text-text-2 text-xs mt-2">
-            {formatDateTime(proposal.closes_at)}
-          </div>
-        </div>
-      )}
-      <ProposalReactionButtons proposalId={id || proposal.id} lng={lng} />
-      <div className="card text-xs text-text-2 space-y-2 leading-relaxed">
-        <p><strong className="text-text">{t('proposal.sidebar.proposalId')}</strong></p>
-        <p className="font-mono break-all">{proposal.id}</p>
-        {config?.contract_address && (
-          <>
-            <p className="pt-2"><strong className="text-text">{t('proposal.sidebar.contract')}</strong></p>
-            <p className="font-mono break-all">{config.contract_address}</p>
-          </>
-        )}
-      </div>
-    </div>
-  )
-
   return (
     <div className="max-w-[1400px] mx-auto px-5 md:px-12 py-12">
       <div className="mb-8">
@@ -97,9 +68,7 @@ export function ProposalDetailPage() {
         </Link>
       </div>
 
-      {/* Header — width matches the left column (1fr) on desktop so title
-          and summary don't stretch the full page. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-8 mb-8">
+      <div className="mb-8">
         <header className="min-w-0">
           <div className="flex flex-wrap items-center gap-3 mb-4">
             {showOpenBadge && (
@@ -180,49 +149,40 @@ export function ProposalDetailPage() {
             />
           )}
         </header>
-        {/* Empty cell on the right column under the header — keeps the
-            sidebar starting flush with the description below. */}
       </div>
 
-      {/* Body: 2-column grid below the header. Sidebar starts at the same
-          vertical line as the description and scrolls with the page. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-8 items-start">
-        <div className="space-y-8 min-w-0">
-          <TranslatedText
-            as="article"
-            className="card prose prose-invert prose-sm max-w-none prose-a:text-accent prose-headings:text-text"
-            translated={proposal.description}
-            original={proposal.original_description}
-            isTranslated={proposal.is_translated}
-            status={proposal.translation_status}
-            mode={translationMode}
-            render={(text) => <Markdown>{text}</Markdown>}
+      <div className="space-y-8 min-w-0">
+        <TranslatedText
+          as="article"
+          className="card prose prose-invert prose-sm max-w-none prose-a:text-accent prose-headings:text-text"
+          translated={proposal.description}
+          original={proposal.original_description}
+          isTranslated={proposal.is_translated}
+          status={proposal.translation_status}
+          mode={translationMode}
+          render={(text) => <Markdown>{text}</Markdown>}
+        />
+
+        <RequestedAndCountdown
+          usdt={proposal.requested_amount_usdt}
+          gnk={proposal.requested_amount_gnk}
+          closesAt={proposal.closes_at}
+          status={proposal.status}
+        />
+
+        <section className="card">
+          <ReactionStatsWithReactions
+            proposalId={id || proposal.id}
+            lng={lng}
+            likesCount={proposal.likes_count}
+            dislikesCount={proposal.dislikes_count}
+            likesWeightNgonka={proposal.likes_weight_ngonka}
+            dislikesWeightNgonka={proposal.dislikes_weight_ngonka}
+            myReaction={proposal.my_reaction}
           />
+        </section>
 
-          <RequestedAmountBlock
-            usdt={proposal.requested_amount_usdt}
-            gnk={proposal.requested_amount_gnk}
-          />
-
-          <section className="card">
-            <ReactionStatsWithReactions
-              proposalId={id || proposal.id}
-              lng={lng}
-              likesCount={proposal.likes_count}
-              dislikesCount={proposal.dislikes_count}
-              likesWeightNgonka={proposal.likes_weight_ngonka}
-              dislikesWeightNgonka={proposal.dislikes_weight_ngonka}
-              myReaction={proposal.my_reaction}
-            />
-          </section>
-
-          {/* Sidebar inline on mobile only — sits between reactions and Comments. */}
-          <div className="lg:hidden">{sidebar}</div>
-
-          <Comments proposalId={proposal.id} />
-        </div>
-
-        <aside className="hidden lg:block">{sidebar}</aside>
+        <Comments proposalId={proposal.id} />
       </div>
     </div>
   )
@@ -234,19 +194,37 @@ function fmtRequested(n: number): string {
   return n.toLocaleString()
 }
 
-function RequestedAmountBlock({ usdt, gnk }: { usdt: number; gnk: number }) {
+function RequestedAndCountdown({
+  usdt, gnk, closesAt, status,
+}: {
+  usdt: number
+  gnk: number
+  closesAt: string | null
+  status: 'open' | 'closed'
+}) {
   const { t } = useTranslation()
-  if (usdt <= 0 && gnk <= 0) return null
+  const hasRequested = usdt > 0 || gnk > 0
   const parts: string[] = []
   if (usdt > 0) parts.push(`${fmtRequested(usdt)} USDT`)
   if (gnk > 0) parts.push(`${fmtRequested(gnk)} GNK`)
+  if (!hasRequested && !closesAt) return null
   return (
-    <section className="card">
-      <div className="text-[11px] uppercase tracking-wider text-text-2 mb-2">
-        {t('proposal.reactions.requestedAmount')}
-      </div>
-      <div className="text-2xl md:text-3xl font-extrabold">{parts.join(' + ')}</div>
-    </section>
+    <div className={`grid gap-4 ${hasRequested && closesAt ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+      {hasRequested && (
+        <section className="card">
+          <div className="text-[11px] uppercase tracking-wider text-text-2 mb-2">
+            {t('proposal.reactions.requestedAmount')}
+          </div>
+          <div className="text-2xl md:text-3xl font-extrabold">{parts.join(' + ')}</div>
+        </section>
+      )}
+      {closesAt && (
+        <section className="card">
+          <CountdownBig closesAt={closesAt} status={status} />
+          <div className="text-text-2 text-xs mt-2">{formatDateTime(closesAt)}</div>
+        </section>
+      )}
+    </div>
   )
 }
 

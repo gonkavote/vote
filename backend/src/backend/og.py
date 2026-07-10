@@ -126,7 +126,7 @@ async def og_home(request: Request) -> HTMLResponse:
 
 
 @og_router.get("/proposal/{proposal_id}", response_class=HTMLResponse)
-async def og_proposal(proposal_id: UUID, request: Request) -> HTMLResponse:
+async def og_proposal(proposal_id: str, request: Request) -> HTMLResponse:
     url = f"{SITE_BASE}/proposal/{proposal_id}"
     fallback_body = f"<a href=\"{html.escape(url)}\">{html.escape(DEFAULT_TITLE)}</a>"
     fallback = HTMLResponse(
@@ -134,14 +134,27 @@ async def og_proposal(proposal_id: UUID, request: Request) -> HTMLResponse:
         headers={"Cache-Control": "public, max-age=60"},
     )
     try:
+        UUID(proposal_id)
+        where_clause = "id = {id:UUID}"
+        params = {"id": proposal_id}
+    except (ValueError, AttributeError):
+        # Fall back to short_id lookup. Validate shape to avoid arbitrary
+        # inputs bombing the query — 6-char [a-z0-9] only.
+        if len(proposal_id) != 6 or not all(
+            c in "abcdefghijklmnopqrstuvwxyz0123456789" for c in proposal_id
+        ):
+            return fallback
+        where_clause = "short_id = {sid:String}"
+        params = {"sid": proposal_id}
+    try:
         ch = _ensure_ch()
         row = await ch.query_one(
-            """
+            f"""
             SELECT title, summary, description
             FROM gonka_vote.proposals FINAL
-            WHERE id = {id:UUID} AND deleted_at IS NULL
+            WHERE {where_clause} AND deleted_at IS NULL
             """,
-            {"id": str(proposal_id)},
+            params,
         )
     except Exception as e:
         logger.warning("og proposal %s: %s", proposal_id, e)
@@ -270,7 +283,7 @@ async def sitemap() -> Response:
         ch = _ensure_ch()
         for r in await ch.query_rows(
             """
-            SELECT id, COALESCE(updated_at, created_at) AS lastmod
+            SELECT id, short_id, COALESCE(updated_at, created_at) AS lastmod
             FROM gonka_vote.proposals FINAL
             WHERE deleted_at IS NULL
             ORDER BY lastmod DESC
@@ -279,7 +292,8 @@ async def sitemap() -> Response:
         ):
             lm = r["lastmod"]
             iso = lm.strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(lm, datetime) else now_iso
-            urls.append(_u(f"{SITE_BASE}/proposal/{r['id']}", iso, "0.7", "daily"))
+            slug = r.get("short_id") or r["id"]
+            urls.append(_u(f"{SITE_BASE}/proposal/{slug}", iso, "0.7", "daily"))
 
         for r in await ch.query_rows(
             """
