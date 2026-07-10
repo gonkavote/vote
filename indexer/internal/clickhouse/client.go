@@ -165,6 +165,147 @@ type SnapshotRow struct {
 	VotedAt          time.Time
 }
 
+// ----------------------------------------------------------------------------
+// Wallet ↔ account_uid links (populated from LinkAccount contract events)
+// ----------------------------------------------------------------------------
+
+type LinkRow struct {
+	Wallet      string
+	AccountUID  string
+	Height      uint64
+	Timestamp   time.Time
+}
+
+// UpsertWalletLinks inserts/overwrites (wallet → account_uid) rows.
+// ReplacingMergeTree(updated_at) picks the freshest row per wallet.
+func (c *Client) UpsertWalletLinks(ctx context.Context, rows []LinkRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	batch, err := c.conn.PrepareBatch(ctx,
+		`INSERT INTO gonka_vote.wallet_links
+		    (wallet, account_uid, balance_ngonka, linked_at, updated_at)`)
+	if err != nil {
+		return fmt.Errorf("prepare links batch: %w", err)
+	}
+	for _, r := range rows {
+		if err := batch.Append(r.Wallet, r.AccountUID, big.NewInt(0), r.Timestamp, r.Timestamp); err != nil {
+			return fmt.Errorf("append link: %w", err)
+		}
+	}
+	return batch.Send()
+}
+
+// UnlinkWallets marks the given wallets as unlinked (soft delete via
+// unlinked_at). The next ReplacingMergeTree merge collapses rows.
+func (c *Client) UnlinkWallets(ctx context.Context, wallets []string, ts time.Time) error {
+	if len(wallets) == 0 {
+		return nil
+	}
+	// We re-INSERT rows preserving existing (account_uid, linked_at) but with
+	// unlinked_at set. Read-back-and-write keeps ORDER BY (wallet) semantics.
+	rows, err := c.conn.Query(ctx, `
+		SELECT wallet, account_uid, balance_ngonka, linked_at
+		FROM gonka_vote.wallet_links FINAL
+		WHERE wallet IN ? AND unlinked_at IS NULL
+	`, wallets)
+	if err != nil {
+		return fmt.Errorf("select wallets to unlink: %w", err)
+	}
+	defer rows.Close()
+
+	batch, err := c.conn.PrepareBatch(ctx,
+		`INSERT INTO gonka_vote.wallet_links
+		    (wallet, account_uid, balance_ngonka, linked_at, unlinked_at, updated_at)`)
+	if err != nil {
+		return fmt.Errorf("prepare unlink batch: %w", err)
+	}
+	var appended int
+	for rows.Next() {
+		var (
+			wallet     string
+			accountUID string
+			balance    *big.Int
+			linkedAt   time.Time
+		)
+		if err := rows.Scan(&wallet, &accountUID, &balance, &linkedAt); err != nil {
+			return fmt.Errorf("scan unlink row: %w", err)
+		}
+		if balance == nil {
+			balance = big.NewInt(0)
+		}
+		if err := batch.Append(wallet, accountUID, balance, linkedAt, ts, ts); err != nil {
+			return fmt.Errorf("append unlink: %w", err)
+		}
+		appended++
+	}
+	if appended == 0 {
+		return nil
+	}
+	return batch.Send()
+}
+
+// ListLinkedWallets returns wallets that are currently linked (not unlinked)
+// along with the account_uid and previous linked_at (for preservation).
+type LinkedWallet struct {
+	Wallet     string
+	AccountUID string
+	LinkedAt   time.Time
+}
+
+func (c *Client) ListLinkedWallets(ctx context.Context) ([]LinkedWallet, error) {
+	rows, err := c.conn.Query(ctx, `
+		SELECT wallet, account_uid, linked_at
+		FROM gonka_vote.wallet_links FINAL
+		WHERE unlinked_at IS NULL
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list linked wallets: %w", err)
+	}
+	defer rows.Close()
+	var out []LinkedWallet
+	for rows.Next() {
+		var lw LinkedWallet
+		if err := rows.Scan(&lw.Wallet, &lw.AccountUID, &lw.LinkedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, lw)
+	}
+	return out, nil
+}
+
+// UpsertBalances writes fresh balance snapshots for the given wallets. Uses
+// ListLinkedWallets output to preserve (account_uid, linked_at).
+type BalanceUpdate struct {
+	Wallet     string
+	AccountUID string
+	LinkedAt   time.Time
+	Balance    *big.Int
+}
+
+func (c *Client) UpsertBalances(ctx context.Context, updates []BalanceUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	batch, err := c.conn.PrepareBatch(ctx,
+		`INSERT INTO gonka_vote.wallet_links
+		    (wallet, account_uid, balance_ngonka, linked_at, balance_refreshed_at, updated_at)`)
+	if err != nil {
+		return fmt.Errorf("prepare balances batch: %w", err)
+	}
+	now := time.Now().UTC()
+	for _, u := range updates {
+		bal := u.Balance
+		if bal == nil {
+			bal = big.NewInt(0)
+		}
+		if err := batch.Append(u.Wallet, u.AccountUID, bal, u.LinkedAt, now, now); err != nil {
+			return fmt.Errorf("append balance: %w", err)
+		}
+	}
+	return batch.Send()
+}
+
 func (c *Client) InsertSnapshots(ctx context.Context, rows []SnapshotRow) error {
 	if len(rows) == 0 {
 		return nil

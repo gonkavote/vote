@@ -1,17 +1,15 @@
 // Modal that drives a single WalletConnect signing flow:
 //   pairing → wallet approves → fetch account → cosmos_signDirect → broadcast.
-// Renders the QR + copy/deeplink controls until the wallet pairs, then a
-// progress state, then a success or error state.
 //
 // Two flavours via the discriminated `op` prop:
-//   • op.kind = 'proposal' — CosmWasm MsgExecuteContract on the vote contract.
-//   • op.kind = 'gov'    — Cosmos governance MsgVote on a proposal.
+//   • op.kind = 'link_account' — LinkAccount wasm exec on the wallet-link contract.
+//   • op.kind = 'gov'          — Cosmos governance MsgVote.
 
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import {
-  castVote,
+  castLinkAccount,
   castGovVote,
   connect,
   disconnect,
@@ -26,11 +24,9 @@ import type { SessionTypes } from '@walletconnect/types'
 
 export type WalletConnectOp =
   | {
-      kind: 'proposal'
+      kind: 'link_account'
       contractAddress: string
-      proposalId: string
-      amountNgonka: string
-      amountGnkLabel: string
+      accountUid: string
     }
   | {
       kind: 'gov'
@@ -41,9 +37,9 @@ export type WalletConnectOp =
 
 interface Props {
   op: WalletConnectOp
-  restUrl: string
+  restUrl?: string
   onClose: () => void
-  onSuccess: (txhash: string) => void
+  onSuccess?: (txhash: string) => void
 }
 
 type Stage =
@@ -57,6 +53,7 @@ type Stage =
 export function WalletConnectModal({ op, restUrl, onClose, onSuccess }: Props) {
   const { t } = useTranslation()
   const { data: cfg } = useAppConfig()
+  const effectiveRest = restUrl ?? cfg?.rest_url ?? '/api/chain'
   const trackerLinks = useTrackerLinks(cfg)
   const [stage, setStage] = useState<Stage>({ kind: 'connecting' })
   const [copied, setCopied] = useState(false)
@@ -86,17 +83,16 @@ export function WalletConnectModal({ op, restUrl, onClose, onSuccess }: Props) {
         if (cancelledRef.current) return
         setStage({ kind: 'signing', account })
 
-        const result = op.kind === 'proposal'
-          ? await castVote(session, account, {
+        const result = op.kind === 'link_account'
+          ? await castLinkAccount(session, account, {
               contractAddress: op.contractAddress,
-              proposalId: op.proposalId,
-              amountNgonka: op.amountNgonka,
-              restUrl,
+              accountUid: op.accountUid,
+              restUrl: effectiveRest,
             })
           : await castGovVote(session, account, {
               proposalId: op.proposalId,
               option: op.option,
-              restUrl,
+              restUrl: effectiveRest,
             })
         if (cancelledRef.current) return
 
@@ -108,7 +104,7 @@ export function WalletConnectModal({ op, restUrl, onClose, onSuccess }: Props) {
           return
         }
         setStage({ kind: 'success', txhash: result.txhash })
-        onSuccess(result.txhash)
+        onSuccess?.(result.txhash)
       } catch (e) {
         if (cancelledRef.current) return
         setStage({
@@ -154,12 +150,14 @@ export function WalletConnectModal({ op, restUrl, onClose, onSuccess }: Props) {
           ×
         </button>
 
-        <h2 className="text-lg font-semibold mb-1">{t('wc.title')}</h2>
+        <h2 className="text-lg font-semibold mb-1">
+          {op.kind === 'link_account' ? t('wc.linkTitle') : t('wc.title')}
+        </h2>
         <p className="text-text-2 text-sm mb-5">
-          {op.kind === 'proposal' ? (
+          {op.kind === 'link_account' ? (
             <>
-              {t('wc.bid')}{' '}
-              <span className="text-text font-semibold">{op.amountGnkLabel}</span>
+              {t('wc.linkTo')}{' '}
+              <span className="text-text font-mono">{op.accountUid}</span>
             </>
           ) : (
             <>

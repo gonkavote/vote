@@ -19,12 +19,12 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/gonka/vote/indexer/internal/balance_refresher"
 	"github.com/gonka/vote/indexer/internal/clickhouse"
 	"github.com/gonka/vote/indexer/internal/config"
+	"github.com/gonka/vote/indexer/internal/link_scanner"
 	"github.com/gonka/vote/indexer/internal/logger"
 	"github.com/gonka/vote/indexer/internal/rpc"
-	"github.com/gonka/vote/indexer/internal/scanner"
-	"github.com/gonka/vote/indexer/internal/snapshot"
 )
 
 func main() {
@@ -41,10 +41,10 @@ func main() {
 	l.Infow("starting vote indexer",
 		"rpc_url", cfg.RPCURL,
 		"rest_url", cfg.ChainAPIURL,
-		"contract", cfg.ContractAddress,
+		"link_contract", cfg.LinkContractAddress,
 		"clickhouse", cfg.ClickHouse.Host,
 		"scan_interval", cfg.ScanInterval,
-		"snapshot_interval", cfg.SnapshotInterval,
+		"balance_refresh_interval", cfg.BalanceRefreshInterval,
 	)
 
 	ch, err := clickhouse.New(cfg.ClickHouse)
@@ -55,14 +55,14 @@ func main() {
 
 	rpcClient := rpc.New(cfg.RPCURL, cfg.ChainAPIURL, cfg.TrackerAPIURL, cfg.HTTPTimeout)
 
-	sc := scanner.New(cfg, rpcClient, ch, l)
-	snap := snapshot.New(cfg, rpcClient, ch, l)
+	linkSc := link_scanner.New(cfg, rpcClient, ch, l)
+	balRef := balance_refresher.New(cfg, rpcClient, ch, l)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go sc.Run(ctx)
-	go snap.Run(ctx)
+	go linkSc.Run(ctx)
+	go balRef.Run(ctx)
 	go runHealthServer(ctx, cfg.HealthAddr, ch, l.Named("health"))
 
 	sig := make(chan os.Signal, 1)

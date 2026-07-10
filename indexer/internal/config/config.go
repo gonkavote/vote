@@ -9,15 +9,17 @@ import (
 )
 
 type Config struct {
-	RPCURL          string
-	ChainAPIURL     string
-	TrackerAPIURL   string
-	ContractAddress string
-	HTTPTimeout     time.Duration
+	RPCURL              string
+	ChainAPIURL         string
+	TrackerAPIURL       string
+	ContractAddress     string
+	LinkContractAddress string
+	HTTPTimeout         time.Duration
 
-	ScanInterval       time.Duration
-	SnapshotInterval   time.Duration
-	BalanceConcurrency int
+	ScanInterval           time.Duration
+	SnapshotInterval       time.Duration
+	BalanceRefreshInterval time.Duration
+	BalanceConcurrency     int
 
 	HealthAddr string
 
@@ -38,15 +40,17 @@ type ClickHouseConfig struct {
 // missing variable.
 func Load() (*Config, error) {
 	cfg := &Config{
-		RPCURL:             os.Getenv("RPC_URL"),
-		ChainAPIURL:        os.Getenv("CHAIN_API_URL"),
-		TrackerAPIURL:      os.Getenv("TRACKER_API_URL"),
-		ContractAddress:    os.Getenv("CONTRACT_ADDRESS"),
-		HTTPTimeout:        envDuration("HTTP_TIMEOUT", 30*time.Second),
-		ScanInterval:       envDuration("SCAN_INTERVAL", 2*time.Minute),
-		SnapshotInterval:   envDuration("SNAPSHOT_INTERVAL", 5*time.Minute),
-		BalanceConcurrency: envInt("BALANCE_CONCURRENCY", 10),
-		HealthAddr:         env("HEALTH_ADDR", ":8080"),
+		RPCURL:                 os.Getenv("RPC_URL"),
+		ChainAPIURL:            os.Getenv("CHAIN_API_URL"),
+		TrackerAPIURL:          os.Getenv("TRACKER_API_URL"),
+		ContractAddress:        os.Getenv("CONTRACT_ADDRESS"),
+		LinkContractAddress:    os.Getenv("LINK_CONTRACT_ADDRESS"),
+		HTTPTimeout:            envDuration("HTTP_TIMEOUT", 30*time.Second),
+		ScanInterval:           envDuration("SCAN_INTERVAL", 2*time.Minute),
+		SnapshotInterval:       envDuration("SNAPSHOT_INTERVAL", 5*time.Minute),
+		BalanceRefreshInterval: envDuration("BALANCE_REFRESH_INTERVAL", time.Hour),
+		BalanceConcurrency:     envInt("BALANCE_CONCURRENCY", 10),
+		HealthAddr:             env("HEALTH_ADDR", ":8080"),
 		ClickHouse: ClickHouseConfig{
 			Host:     env("CLICKHOUSE_HOST", "clickhouse"),
 			Port:     envInt("CLICKHOUSE_PORT", 9000),

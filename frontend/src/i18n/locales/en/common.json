@@ -112,6 +112,8 @@
   },
   "wc": {
     "title": "Vote with WalletConnect",
+    "linkTitle": "Link wallet with WalletConnect",
+    "linkTo": "Linking wallet to account",
     "bid": "Grant:",
     "govVote": "Voting {{option}} on proposal #{{id}}",
     "preparing": "Preparing pairing…",
@@ -380,7 +382,18 @@
     "save": "Save",
     "saving": "Saving…",
     "saved": "✓ Saved",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "wallets": {
+      "title": "Linked wallets",
+      "hint": "Link Gonka wallets to weight your likes and dislikes by GNK balance. Balances refresh automatically.",
+      "totalWeight": "Total weight",
+      "balance": "Balance",
+      "refreshed": "refreshed {{when}}",
+      "loading": "Loading wallets…",
+      "empty": "No wallets linked yet.",
+      "linkNew": "Link a wallet",
+      "notConfigured": "Wallet-link contract is not yet configured on this deployment."
+    }
   },
   "profile": {
     "back": "← All proposals",

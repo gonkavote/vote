@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { api, Me } from '../lib/api'
 import { useMe } from '../hooks/useMe'
 import { Avatar } from '../components/Avatar'
+import { LinkedWallets } from '../components/LinkedWallets'
 
 export function MePage() {
   const { t } = useTranslation()
@@ -60,6 +61,8 @@ export function MePage() {
           {t('me.viewPublic')}
         </Link>
       )}
+
+      <LinkedWallets accountUid={me.uid} />
 
       <form onSubmit={submit} className="card space-y-4">
         <div>

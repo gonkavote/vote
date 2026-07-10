@@ -156,11 +156,10 @@ export async function getAccount(session: SessionTypes.Struct): Promise<CosmosAc
 // Build, sign and broadcast MsgExecuteContract
 // ---------------------------------------------------------------------------
 
-export interface VoteParams {
+export interface LinkAccountParams {
   contractAddress: string
-  proposalId: string
-  amountNgonka: string  // decimal string
-  restUrl: string       // /chain-api root
+  accountUid: string
+  restUrl: string
 }
 
 interface AccountInfo {
@@ -282,18 +281,18 @@ async function _signAndBroadcast(
 }
 
 
-export async function castVote(
+export async function castLinkAccount(
   session: SessionTypes.Struct,
   account: CosmosAccount,
-  params: VoteParams,
+  params: LinkAccountParams,
 ): Promise<BroadcastResult> {
-  const voteJson = JSON.stringify({
-    vote: { tender_id: params.proposalId, amount: params.amountNgonka },
+  const linkJson = JSON.stringify({
+    link_account: { account_uid: params.accountUid },
   })
   const msg = MsgExecuteContract.fromPartial({
     sender: account.address,
     contract: params.contractAddress,
-    msg: new TextEncoder().encode(voteJson),
+    msg: new TextEncoder().encode(linkJson),
     funds: [],
   })
   const msgAny = Any.fromPartial({
