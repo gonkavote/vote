@@ -102,6 +102,11 @@ export function HomePage() {
     <div className="max-w-[1400px] mx-auto px-5 md:px-12 py-12 relative">
       {/* Hero — compact */}
       <div className="relative text-center pb-10">
+        <div
+          aria-hidden
+          className="absolute left-1/2 -translate-x-1/2 -top-40 w-[min(700px,100vw)] h-[500px] pointer-events-none z-0"
+          style={{ background: 'radial-gradient(ellipse, rgba(59,130,246,0.15) 0%, transparent 70%)' }}
+        />
         <h1
           className="grad-text font-extrabold leading-tight tracking-tight mb-4 relative"
           style={{ fontSize: 'clamp(1.75rem, 5.5vw, 3.5rem)' }}
