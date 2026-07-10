@@ -102,9 +102,11 @@ export function HomePage() {
     <div className="max-w-[1400px] mx-auto px-5 md:px-12 py-12 relative">
       {/* Hero — compact */}
       <div className="relative text-center pb-10">
-        <h1 className="text-3xl md:text-5xl font-extrabold leading-tight tracking-tight mb-4 relative whitespace-nowrap md:whitespace-nowrap">
-          {t('home.hero.titleLine1')}{' '}
-          <span className="grad-text">{t('home.hero.titleLine2')}</span>
+        <h1
+          className="grad-text font-extrabold leading-tight tracking-tight mb-4 relative"
+          style={{ fontSize: 'clamp(1.75rem, 5.5vw, 3.5rem)' }}
+        >
+          {t('home.hero.titleLine1')} {t('home.hero.titleLine2')}
         </h1>
         <p className="text-text-2 text-base md:text-lg max-w-[720px] mx-auto leading-relaxed relative">
           <Trans i18nKey="home.hero.subtitle" components={{ strong: <strong className="text-text" /> }} />
@@ -241,7 +243,7 @@ function ProposalCard({ it, dim }: { it: ProposalSummary; dim?: boolean }) {
   return (
     <Link
       to={`/proposal/${it.short_id || it.id}`}
-      className={`card card-hover block ${dim ? 'opacity-80 hover:opacity-100 transition-opacity' : ''}`}
+      className={`card card-hover flex flex-col h-full ${dim ? 'opacity-80 hover:opacity-100 transition-opacity' : ''}`}
     >
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -280,15 +282,17 @@ function ProposalCard({ it, dim }: { it: ProposalSummary; dim?: boolean }) {
       {it.summary && (
         <p className="text-text-2 text-[13px] leading-snug mb-4">{it.summary}</p>
       )}
-      <ReactionStats
-        likesCount={it.likes_count}
-        dislikesCount={it.dislikes_count}
-        likesWeightNgonka={it.likes_weight_ngonka}
-        dislikesWeightNgonka={it.dislikes_weight_ngonka}
-        requestedAmountUsdt={it.requested_amount_usdt}
-        requestedAmountGnk={it.requested_amount_gnk}
-        layout="inline"
-      />
+      <div className="mt-auto pt-2">
+        <ReactionStats
+          likesCount={it.likes_count}
+          dislikesCount={it.dislikes_count}
+          likesWeightNgonka={it.likes_weight_ngonka}
+          dislikesWeightNgonka={it.dislikes_weight_ngonka}
+          requestedAmountUsdt={it.requested_amount_usdt}
+          requestedAmountGnk={it.requested_amount_gnk}
+          layout="inline"
+        />
+      </div>
     </Link>
   )
 }

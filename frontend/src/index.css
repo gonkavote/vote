@@ -19,7 +19,7 @@ a { color: inherit; text-decoration: none; }
 
 @layer components {
   .grad-text {
-    background: linear-gradient(135deg, #34d399 0%, #14b8a6 50%, #06b6d4 100%);
+    background: linear-gradient(135deg, #ffffff 0%, #34d399 55%, #06b6d4 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
