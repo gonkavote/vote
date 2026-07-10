@@ -9,11 +9,11 @@ import { useLogin } from '../lib/loginContext'
 import { formatDateTime } from '../lib/format'
 
 const MIN_DAYS = 7
-const PRESETS: { key: '1w' | '2w' | '1m' | '3m'; days: number }[] = [
+const MAX_DAYS = 30
+const PRESETS: { key: '1w' | '2w' | '1m'; days: number }[] = [
   { key: '1w', days: 7 },
   { key: '2w', days: 14 },
   { key: '1m', days: 30 },
-  { key: '3m', days: 90 },
 ]
 
 /** ISO YYYY-MM-DDTHH:mm in *local* time (what <input type="datetime-local"> wants). */
@@ -48,10 +48,18 @@ export function NewProposalPage() {
     d.setDate(d.getDate() + MIN_DAYS)
     return toLocalInputValue(d)
   }, [])
+  const maxLocal = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + MAX_DAYS)
+    return toLocalInputValue(d)
+  }, [])
 
   const closesAtMs = closesAt ? new Date(closesAt).getTime() : NaN
   const minMs = new Date(minLocal).getTime()
-  const deadlineValid = !Number.isNaN(closesAtMs) && closesAtMs >= minMs - 60_000
+  const maxMs = new Date(maxLocal).getTime()
+  const deadlineTooEarly = !Number.isNaN(closesAtMs) && closesAtMs < minMs - 60_000
+  const deadlineTooLate = !Number.isNaN(closesAtMs) && closesAtMs > maxMs + 60_000
+  const deadlineValid = !Number.isNaN(closesAtMs) && !deadlineTooEarly && !deadlineTooLate
 
   const usdtNum = parseInt(requestedUsdt || '0', 10)
   const gnkNum = parseInt(requestedGnk || '0', 10)
@@ -224,7 +232,7 @@ export function NewProposalPage() {
 
         <div>
           <span className="text-sm font-semibold mb-2 block">
-            {t('newProposal.deadline')} <span className="text-text-2 font-normal">{t('newProposal.deadlineHint', { days: MIN_DAYS })}</span>
+            {t('newProposal.deadline')} <span className="text-text-2 font-normal">{t('newProposal.deadlineHint', { min: MIN_DAYS, max: MAX_DAYS })}</span>
           </span>
           <div className="flex flex-wrap gap-2 mb-3">
             {PRESETS.map((p) => (
@@ -242,13 +250,19 @@ export function NewProposalPage() {
             type="datetime-local"
             value={closesAt}
             min={minLocal}
+            max={maxLocal}
             onChange={(e) => setClosesAt(e.target.value)}
             required
             className="w-full bg-bg-2 border border-border rounded-lg p-3 text-sm font-mono focus:outline-none focus:border-accent/50"
           />
-          {!deadlineValid && closesAt && (
+          {deadlineTooEarly && closesAt && (
             <p className="text-rose-400 text-xs mt-1">
               {t('newProposal.deadlineMinError', { days: MIN_DAYS })}
+            </p>
+          )}
+          {deadlineTooLate && closesAt && (
+            <p className="text-rose-400 text-xs mt-1">
+              {t('newProposal.deadlineMaxError', { days: MAX_DAYS })}
             </p>
           )}
           {deadlineValid && closesAt && (

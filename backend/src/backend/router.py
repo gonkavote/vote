@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 MIN_DEADLINE_DELTA = timedelta(days=7)
+MAX_DEADLINE_DELTA = timedelta(days=30)
 # Slack so the "1 week" preset on the frontend (which captures `now + 7d` at
 # render time) doesn't 422 if the user spends a few minutes filling out the
 # form before submitting. Without this, every "1 week" submission that takes
@@ -314,6 +315,11 @@ async def create_proposal(
         raise HTTPException(
             422,
             f"closes_at must be at least {MIN_DEADLINE_DELTA.days} days from now",
+        )
+    if closes_at - now > MAX_DEADLINE_DELTA + DEADLINE_GRACE:
+        raise HTTPException(
+            422,
+            f"closes_at must be at most {MAX_DEADLINE_DELTA.days} days from now",
         )
     if payload.requested_amount_usdt == 0 and payload.requested_amount_gnk == 0:
         raise HTTPException(422, "at least one of requested_amount_usdt / _gnk must be > 0")

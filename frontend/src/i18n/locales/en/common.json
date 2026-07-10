@@ -366,14 +366,14 @@
     "requestedHint": "(fill USDT, GNK, or both)",
     "requestedError": "Enter at least one positive integer amount (USDT or GNK).",
     "deadline": "Deadline",
-    "deadlineHint": "(min {{days}} days)",
+    "deadlineHint": "({{min}}–{{max}} days)",
     "deadlineMinError": "Deadline must be at least {{days}} days from now.",
+    "deadlineMaxError": "Deadline must be at most {{days}} days from now.",
     "deadlinePreview": "Will close on {{when}}",
     "preset": {
       "1w": "1 week",
       "2w": "2 weeks",
-      "1m": "1 month",
-      "3m": "3 months"
+      "1m": "1 month"
     },
     "publish": "Publish",
     "publishing": "Creating…"

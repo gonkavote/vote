@@ -366,14 +366,14 @@
     "requestedHint": "(заполни USDT, GNK или оба)",
     "requestedError": "Введи положительное целое число хотя бы в одном поле (USDT или GNK).",
     "deadline": "Дедлайн",
-    "deadlineHint": "(минимум {{days}} дней)",
+    "deadlineHint": "({{min}}–{{max}} дней)",
     "deadlineMinError": "Дедлайн должен быть хотя бы через {{days}} дней.",
+    "deadlineMaxError": "Дедлайн должен быть не позднее чем через {{days}} дней.",
     "deadlinePreview": "Закроется {{when}}",
     "preset": {
       "1w": "1 неделя",
       "2w": "2 недели",
-      "1m": "1 месяц",
-      "3m": "3 месяца"
+      "1m": "1 месяц"
     },
     "publish": "Опубликовать",
     "publishing": "Создаём…"
