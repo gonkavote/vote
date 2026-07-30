@@ -69,10 +69,12 @@ log "  dumping schema"
   done
 } > "$WORK/schema.sql"
 
-# One tarball for atomicity, then upload.
-BUNDLE="$WORK/gonka_vote-$TS.tar.gz"
+# One tarball for atomicity, then upload. Bundle sits OUTSIDE $WORK so
+# tar doesn't see it grow inside the directory it's archiving.
+BUNDLE="/tmp/gonka_vote-$TS.tar.gz"
 log "packing $BUNDLE"
-tar -C "$WORK" -czf "$BUNDLE" --exclude "$(basename "$BUNDLE")" .
+tar -C "$WORK" -czf "$BUNDLE" .
+trap 'rm -rf "$WORK" "$BUNDLE"' EXIT
 
 SIZE=$(du -h "$BUNDLE" | awk '{print $1}')
 KEY="daily/gonka_vote-$TS.tar.gz"
