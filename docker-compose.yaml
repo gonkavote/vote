@@ -219,6 +219,32 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  backup:
+    # Daily ClickHouse dump → gzipped tarball → Cloudflare R2. Skipped if
+    # R2_* env vars are empty (see backup.sh — it exits with an error which
+    # docker restarts, so keep them set once configured).
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    container_name: gonka-vote-backup
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_DATABASE=${CLICKHOUSE_DB:-gonka_vote}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_BUCKET=${R2_BUCKET:-}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      - BACKUP_TIME=${BACKUP_TIME:-03:00}
+      - RUN_ON_START=${BACKUP_RUN_ON_START:-false}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
