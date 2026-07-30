@@ -1,16 +1,15 @@
-# Small Alpine image with clickhouse-client + aws-cli. Runs a bash loop that
-# dumps the whole gonka_vote database once a day and uploads it to R2.
-FROM alpine:3.20
+# Official ClickHouse client image already has clickhouse-client + tzdata.
+# Add aws-cli (via pip so no repo-manager surprises) + tar/gzip.
+FROM clickhouse/clickhouse-server:24.8-alpine
 
 RUN apk add --no-cache \
       bash \
       curl \
       gzip \
       tar \
-      tzdata \
-      aws-cli \
-      clickhouse-client \
-      coreutils
+      py3-pip \
+      coreutils \
+    && pip install --break-system-packages --no-cache-dir awscli
 
 COPY backup.sh /usr/local/bin/backup.sh
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
