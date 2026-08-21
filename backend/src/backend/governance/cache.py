@@ -82,6 +82,88 @@ async def is_detail_stale(ch: CHClient, proposal_id: int, ttl_sec: int) -> bool:
 # Proposal upsert (with translation diff detection)
 # ----------------------------------------------------------------------------
 
+# How old an otherwise-unchanged row may get before we rewrite it purely to
+# bump fetched_at. Readers treat a row as stale past governance_detail_ttl
+# (60 s) and the list past governance_list_ttl (300 s); refreshing at 150 s
+# sits between the two, so an idle proposal still gets its timestamp bumped
+# well before is_list_stale() would force a full re-pull. The detail path is
+# unaffected either way — it only kicks a background refresh, never blocks.
+_FETCHED_AT_REFRESH_SEC = 150
+
+
+def _row_unchanged(
+    existing: dict[str, Any],
+    raw: dict[str, Any],
+    status_short: str,
+    messages_str: str,
+    metadata_str: str,
+) -> bool:
+    """True when the incoming payload matches the cached row field-for-field.
+
+    Only compares what upsert_proposal actually writes from `raw`. Columns the
+    poller never sources from the tracker payload (source_lang, the legacy *_t
+    columns) are owned by the translator and are copied forward unchanged, so
+    they can't differ here. fetched_at/updated_at are excluded by design: they
+    move every tick, which is precisely the write we're trying to avoid.
+    """
+    def _s(v: Any) -> str:
+        return "" if v is None else str(v)
+
+    def _i(v: Any) -> int:
+        try:
+            return int(v or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    if _s(existing.get("status")) != status_short:
+        return False
+    if _s(existing.get("metadata_url")) != _s(raw.get("metadata_url")):
+        return False
+    if _s(existing.get("proposer")) != _s(raw.get("proposer")):
+        return False
+    if _i(existing.get("expedited")) != (1 if raw.get("expedited") else 0):
+        return False
+
+    # Vote/deposit tallies are stored as strings (they exceed UInt64), so
+    # compare them as strings the same way they're written.
+    for col in ("yes_count", "no_count", "abstain_count", "veto_count",
+                "total_deposit_ngonka", "total_bonded_at_end"):
+        if _s(existing.get(col)) != _s(raw.get(col) or 0):
+            return False
+
+    for col in ("voted_count", "depositor_count", "total_voters_at_end"):
+        if _i(existing.get(col)) != _i(raw.get(col)):
+            return False
+
+    if list(existing.get("msg_types") or []) != list(raw.get("msg_types") or []):
+        return False
+
+    # Timestamps: the cached column comes back as a datetime (naive UTC via
+    # the driver) while `raw` carries an ISO string, so normalise both through
+    # _parse_dt — it tags naive values as UTC — before comparing. A mismatch
+    # in tz-awareness alone would otherwise make every row look changed and
+    # silently defeat this whole check.
+    for col in ("submit_time", "voting_start_time",
+                "voting_end_time", "deposit_end_time"):
+        if _parse_dt(existing.get(col)) != _parse_dt(raw.get(col)):
+            return False
+
+    raw_epoch = (
+        int(raw["epoch_at_submit"])
+        if raw.get("epoch_at_submit") is not None
+        else None
+    )
+    if existing.get("epoch_at_submit") != raw_epoch:
+        return False
+
+    if _s(existing.get("existing_messages")) != messages_str:
+        return False
+    if _s(existing.get("existing_metadata")) != metadata_str:
+        return False
+
+    return True
+
+
 async def upsert_proposal(ch: CHClient, raw: dict[str, Any]) -> None:
     """Insert/update one proposal row.
 
@@ -99,7 +181,14 @@ async def upsert_proposal(ch: CHClient, raw: dict[str, Any]) -> None:
         SELECT title, summary, failed_reason, source_lang, status,
                title_t, summary_t, failed_reason_t,
                messages       AS existing_messages,
-               metadata       AS existing_metadata
+               metadata       AS existing_metadata,
+               metadata_url, proposer, expedited,
+               yes_count, no_count, abstain_count, veto_count,
+               total_deposit_ngonka, voted_count, depositor_count,
+               total_voters_at_end, total_bonded_at_end, msg_types,
+               submit_time, voting_start_time, voting_end_time,
+               deposit_end_time, epoch_at_submit,
+               dateDiff('second', fetched_at, now64(3)) AS fetched_age
         FROM gonka_vote.gov_proposals FINAL
         WHERE proposal_id = {pid:UInt32}
         """,
@@ -144,6 +233,30 @@ async def upsert_proposal(ch: CHClient, raw: dict[str, Any]) -> None:
     metadata_str = _stringify(raw.get("metadata"))
     if not metadata_str and existing:
         metadata_str = str(existing.get("existing_metadata") or "")
+
+    # Skip the write when nothing user-visible changed.
+    #
+    # The poller ticks every 60 s over every active proposal, but a
+    # proposal's payload only actually moves when someone votes/deposits or
+    # it changes status. Re-INSERTing an identical row still creates a new
+    # part that ReplacingMergeTree then merges and drops — that churn was
+    # producing ~9k parts/day for ~1.4 MiB of data, and dominated the disk
+    # operations bill.
+    #
+    # fetched_at is the one field that legitimately changes every tick, and
+    # is_detail_stale()/is_list_stale() read it to decide whether a page
+    # view should kick a background refresh. So we can't freeze it forever:
+    # we let an unchanged row through once its age approaches the detail
+    # TTL. That keeps the staleness contract intact while collapsing ~N
+    # writes per TTL window down to one.
+    if existing is not None and not text_changed:
+        age = existing.get("fetched_age")
+        refresh_due = age is None or int(age) >= _FETCHED_AT_REFRESH_SEC
+        if not refresh_due and _row_unchanged(
+            existing, raw, status_short, messages_str, metadata_str,
+        ):
+            return
+
     await ch.insert(
         "gov_proposals",
         ["proposal_id", "title", "summary", "metadata_url", "proposer", "status",
@@ -307,12 +420,27 @@ async def upsert_metadata(
     new_md = str(md.get("markdown") or "")
     new_url = str(md.get("source_url") or "")
     existing = await ch.query_one(
-        "SELECT markdown, markdown_t FROM gonka_vote.gov_metadata FINAL "
+        "SELECT markdown, markdown_t, source_url, "
+        "dateDiff('second', fetched_at, now64(3)) AS fetched_age "
+        "FROM gonka_vote.gov_metadata FINAL "
         "WHERE proposal_id = {pid:UInt32}",
         {"pid": proposal_id},
     )
     text_changed = existing is None or existing.get("markdown") != new_md
     markdown_t = "{}" if text_changed else (existing.get("markdown_t") or "{}")
+
+    # Same story as upsert_proposal: the poller re-fetches GitHub markdown for
+    # every active proposal on every tick, but the markdown itself only moves
+    # when the proposer edits it. Skip the write when nothing changed, letting
+    # a stale-enough row through so fetched_at doesn't freeze. source_url is
+    # compared too — it's written from `md` but isn't part of text_changed, so
+    # a URL-only edit would otherwise be silently dropped.
+    if existing is not None and not text_changed:
+        age = existing.get("fetched_age")
+        fresh = age is not None and int(age) < _FETCHED_AT_REFRESH_SEC
+        if fresh and str(existing.get("source_url") or "") == new_url:
+            return
+
     now = datetime.now(timezone.utc)
     await ch.insert(
         "gov_metadata",
@@ -328,11 +456,32 @@ async def upsert_metadata(
 
 
 async def upsert_params(ch: CHClient, params: dict[str, Any]) -> None:
+    """Persist the /governance/params snapshot (a single pk=1 row).
+
+    Chain params move on governance upgrades — i.e. almost never — but the
+    poller refreshes them every tick. Writing an identical row each time still
+    spawns a part that ReplacingMergeTree has to merge and drop, so compare
+    the serialised payload first and only write when it actually differs (or
+    when the stored timestamp has gone stale enough to be worth refreshing;
+    /governance/params surfaces fetched_at to the client).
+    """
+    payload = json.dumps(params, ensure_ascii=False)
+    existing = await ch.query_one(
+        "SELECT payload_json, "
+        "dateDiff('second', fetched_at, now64(3)) AS fetched_age "
+        "FROM gonka_vote.gov_params FINAL WHERE pk = 1"
+    )
+    if existing is not None:
+        age = existing.get("fetched_age")
+        fresh = age is not None and int(age) < _FETCHED_AT_REFRESH_SEC
+        if fresh and str(existing.get("payload_json") or "") == payload:
+            return
+
     now = datetime.now(timezone.utc)
     await ch.insert(
         "gov_params",
         ["pk", "payload_json", "fetched_at", "updated_at"],
-        [[1, json.dumps(params, ensure_ascii=False), now, now]],
+        [[1, payload, now, now]],
     )
 
 
