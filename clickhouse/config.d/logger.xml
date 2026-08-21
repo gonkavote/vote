@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!--
+  Server log verbosity and rotation.
+
+  The 24.12 image ships <level>trace</level> with <size>1000M</size> and
+  <count>10</count>. On this server that meant clickhouse-server.log growing
+  ~2.8 GiB/day — engine telemetry (MergeTreeSequentialSource, MemoryTracker,
+  per-SELECT pipeline traces) for a database holding ~245 MiB of actual data,
+  and ~900 MiB of live + rotated logs sitting on a 30 GB disk.
+
+  That write volume is billed. Azure meters managed-disk operations at the
+  block layer and does not care whether a write carries table data or log
+  text, so the log file alone accounted for roughly 20M operations/month
+  (~$4/mo) once application writes had been gated on real changes.
+
+  Note this is a SEPARATE channel from system.text_log (disabled in
+  system_logs_ttl.xml). Turning off the table left the file untouched, which
+  is why disk operations only fell by a third after that change.
+
+  warning keeps startup/shutdown notices, config problems, failed queries and
+  every error — i.e. what is actually consulted when something breaks — while
+  dropping the per-operation trace chatter. Drop to information temporarily
+  if a problem needs more context, or to debug/trace while reproducing a bug;
+  both are safe to run briefly, just not as a steady state.
+
+  size/count also bound the worst case: 3 x 100M instead of 10 x 1000M, so
+  logs can occupy at most ~300 MiB rather than potentially filling the disk.
+-->
+<clickhouse>
+    <logger>
+        <level>warning</level>
+        <size>100M</size>
+        <count>3</count>
+    </logger>
+</clickhouse>
