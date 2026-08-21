@@ -1,6 +1,27 @@
 <?xml version="1.0"?>
 <!--
-  3-day TTL for ClickHouse internal system log tables.
+  System log tables: high-volume ones disabled, the rest kept with a 1-day TTL.
+
+  Disabled via <name remove="1"/>: text_log, trace_log, metric_log,
+  asynchronous_metric_log, processors_profile_log, query_metric_log.
+
+  Why: this server holds ~245 MiB of actual data, but those tables held
+  ~290 MiB between them and text_log alone was writing ~48 rows/s of engine
+  telemetry (MergeTreeSequentialSource, MemoryTracker, per-SELECT pipeline
+  traces). With application writes now gated on real changes, system logs
+  had become essentially the only thing touching the disk — ~3900 write ops
+  per minute for data nobody reads. TTL bounds retention but not the write
+  rate, so the collection itself is what had to go.
+
+  Kept: query_log and part_log (used to diagnose write churn — see the
+  gov_* upsert change-detection work; both are low-volume: ~140k and ~33k
+  rows vs millions for the disabled ones) and error_log (tiny, and the
+  first place to look when something breaks).
+
+  Re-enable temporarily by dropping the corresponding remove="1" line and
+  restarting the server if deep engine tracing is ever needed.
+
+  The 1-day TTL notes below still apply to the tables that remain enabled.
 
   Applied via config.d (NOT a one-off ALTER migration) so the TTL is
   re-asserted on every server start AND on every freshly created log table.
@@ -40,23 +61,11 @@
         <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
     </query_log>
 
-    <trace_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </trace_log>
+    <trace_log remove="1"/>
 
-    <text_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </text_log>
+    <text_log remove="1"/>
 
-    <metric_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </metric_log>
+    <metric_log remove="1"/>
 
     <part_log>
         <partition_by>toYYYYMMDD(event_date)</partition_by>
@@ -64,17 +73,9 @@
         <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
     </part_log>
 
-    <processors_profile_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </processors_profile_log>
+    <processors_profile_log remove="1"/>
 
-    <asynchronous_metric_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>metric, event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </asynchronous_metric_log>
+    <asynchronous_metric_log remove="1"/>
 
     <error_log>
         <partition_by>toYYYYMMDD(event_date)</partition_by>
@@ -82,9 +83,5 @@
         <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
     </error_log>
 
-    <query_metric_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </query_metric_log>
+    <query_metric_log remove="1"/>
 </clickhouse>
