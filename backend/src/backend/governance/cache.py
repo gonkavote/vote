@@ -52,16 +52,31 @@ async def is_list_stale(ch: CHClient, ttl_sec: int) -> bool:
         (background poller only refreshes active ones — first-time visit
         for the All / Passed tabs would otherwise show nothing).
     """
+    # Only *active* proposals age: upsert_proposal skips writing rows whose
+    # content is unchanged, so fetched_at on a settled proposal stops moving
+    # by design. Measuring freshness across all rows would then read as
+    # permanently stale and kick a full re-pull on every page view. Voting /
+    # deposit proposals are the ones that can actually change, so their
+    # freshness is what decides whether the list needs re-pulling; when there
+    # are none, the cached list cannot go out of date on its own.
     row = await ch.query_one(
         "SELECT count() AS n, "
-        "dateDiff('second', max(fetched_at), now64(3)) AS age "
-        "FROM gonka_vote.gov_proposals"
+        "countIf(status IN ('voting', 'deposit')) AS active, "
+        "maxIf(fetched_at, status IN ('voting', 'deposit')) AS active_fetched_at, "
+        "dateDiff('second', "
+        "         maxIf(fetched_at, status IN ('voting', 'deposit')), "
+        "         now64(3)) AS active_age "
+        "FROM gonka_vote.gov_proposals FINAL"
     )
     if not row or (row.get("n") or 0) == 0:
         return True
     if int(row["n"]) < 5:
         return True
-    age = row.get("age")
+    if (row.get("active") or 0) == 0:
+        # Nothing can change until a new proposal appears; the poller picks
+        # those up on its own tick without needing a list-wide refresh.
+        return False
+    age = row.get("active_age")
     if age is None:
         return True
     return int(age) > ttl_sec
@@ -81,15 +96,6 @@ async def is_detail_stale(ch: CHClient, proposal_id: int, ttl_sec: int) -> bool:
 # ----------------------------------------------------------------------------
 # Proposal upsert (with translation diff detection)
 # ----------------------------------------------------------------------------
-
-# How old an otherwise-unchanged row may get before we rewrite it purely to
-# bump fetched_at. Readers treat a row as stale past governance_detail_ttl
-# (60 s) and the list past governance_list_ttl (300 s); refreshing at 150 s
-# sits between the two, so an idle proposal still gets its timestamp bumped
-# well before is_list_stale() would force a full re-pull. The detail path is
-# unaffected either way — it only kicks a background refresh, never blocks.
-_FETCHED_AT_REFRESH_SEC = 150
-
 
 def _row_unchanged(
     existing: dict[str, Any],
@@ -187,8 +193,7 @@ async def upsert_proposal(ch: CHClient, raw: dict[str, Any]) -> None:
                total_deposit_ngonka, voted_count, depositor_count,
                total_voters_at_end, total_bonded_at_end, msg_types,
                submit_time, voting_start_time, voting_end_time,
-               deposit_end_time, epoch_at_submit,
-               dateDiff('second', fetched_at, now64(3)) AS fetched_age
+               deposit_end_time, epoch_at_submit
         FROM gonka_vote.gov_proposals FINAL
         WHERE proposal_id = {pid:UInt32}
         """,
@@ -234,28 +239,29 @@ async def upsert_proposal(ch: CHClient, raw: dict[str, Any]) -> None:
     if not metadata_str and existing:
         metadata_str = str(existing.get("existing_metadata") or "")
 
-    # Skip the write when nothing user-visible changed.
+    # Identical row in, identical row already stored → nothing to write.
     #
-    # The poller ticks every 60 s over every active proposal, but a
-    # proposal's payload only actually moves when someone votes/deposits or
-    # it changes status. Re-INSERTing an identical row still creates a new
-    # part that ReplacingMergeTree then merges and drops — that churn was
-    # producing ~9k parts/day for ~1.4 MiB of data, and dominated the disk
-    # operations bill.
+    # The poller ticks every 60 s over every active proposal and the lazy
+    # list refresh re-pulls all of them, but a proposal's payload only moves
+    # when someone votes/deposits or it changes status. Re-INSERTing an
+    # unchanged row still spawns a part that ReplacingMergeTree has to merge
+    # and drop — that churn produced ~9k parts/day for ~1.4 MiB of data and
+    # dominated the disk-operations bill.
     #
-    # fetched_at is the one field that legitimately changes every tick, and
-    # is_detail_stale()/is_list_stale() read it to decide whether a page
-    # view should kick a background refresh. So we can't freeze it forever:
-    # we let an unchanged row through once its age approaches the detail
-    # TTL. That keeps the staleness contract intact while collapsing ~N
-    # writes per TTL window down to one.
-    if existing is not None and not text_changed:
-        age = existing.get("fetched_age")
-        refresh_due = age is None or int(age) >= _FETCHED_AT_REFRESH_SEC
-        if not refresh_due and _row_unchanged(
-            existing, raw, status_short, messages_str, metadata_str,
-        ):
-            return
+    # fetched_at/updated_at are deliberately not part of the comparison: they
+    # move every tick by construction, so treating them as a difference would
+    # mean never skipping anything. Freezing them is safe — the only readers,
+    # is_list_stale() and is_detail_stale(), use them to decide whether to
+    # kick a *background* refresh; neither blocks a response or changes what
+    # the user sees. is_list_stale() ignores rows whose content is settled
+    # (see its query) so a frozen timestamp can't wedge it into refreshing on
+    # every page view.
+    if (
+        existing is not None
+        and not text_changed
+        and _row_unchanged(existing, raw, status_short, messages_str, metadata_str)
+    ):
+        return
 
     await ch.insert(
         "gov_proposals",
@@ -420,8 +426,7 @@ async def upsert_metadata(
     new_md = str(md.get("markdown") or "")
     new_url = str(md.get("source_url") or "")
     existing = await ch.query_one(
-        "SELECT markdown, markdown_t, source_url, "
-        "dateDiff('second', fetched_at, now64(3)) AS fetched_age "
+        "SELECT markdown, markdown_t, source_url "
         "FROM gonka_vote.gov_metadata FINAL "
         "WHERE proposal_id = {pid:UInt32}",
         {"pid": proposal_id},
@@ -431,15 +436,15 @@ async def upsert_metadata(
 
     # Same story as upsert_proposal: the poller re-fetches GitHub markdown for
     # every active proposal on every tick, but the markdown itself only moves
-    # when the proposer edits it. Skip the write when nothing changed, letting
-    # a stale-enough row through so fetched_at doesn't freeze. source_url is
-    # compared too — it's written from `md` but isn't part of text_changed, so
-    # a URL-only edit would otherwise be silently dropped.
-    if existing is not None and not text_changed:
-        age = existing.get("fetched_age")
-        fresh = age is not None and int(age) < _FETCHED_AT_REFRESH_SEC
-        if fresh and str(existing.get("source_url") or "") == new_url:
-            return
+    # when the proposer edits it — so an unchanged payload writes nothing.
+    # source_url is compared too: it's written from `md` but isn't part of
+    # text_changed, so a URL-only edit would otherwise be silently dropped.
+    if (
+        existing is not None
+        and not text_changed
+        and str(existing.get("source_url") or "") == new_url
+    ):
+        return
 
     now = datetime.now(timezone.utc)
     await ch.insert(
@@ -467,15 +472,10 @@ async def upsert_params(ch: CHClient, params: dict[str, Any]) -> None:
     """
     payload = json.dumps(params, ensure_ascii=False)
     existing = await ch.query_one(
-        "SELECT payload_json, "
-        "dateDiff('second', fetched_at, now64(3)) AS fetched_age "
-        "FROM gonka_vote.gov_params FINAL WHERE pk = 1"
+        "SELECT payload_json FROM gonka_vote.gov_params FINAL WHERE pk = 1"
     )
-    if existing is not None:
-        age = existing.get("fetched_age")
-        fresh = age is not None and int(age) < _FETCHED_AT_REFRESH_SEC
-        if fresh and str(existing.get("payload_json") or "") == payload:
-            return
+    if existing is not None and str(existing.get("payload_json") or "") == payload:
+        return
 
     now = datetime.now(timezone.utc)
     await ch.insert(
