@@ -89,6 +89,13 @@ func (r *Refresher) refreshWallets(ctx context.Context, wallets []clickhouse.Lin
 				r.log.Warnw("balance fetch failed", "wallet", lw.Wallet, "err", err)
 				return
 			}
+			// Only write when the balance actually moved. wallet_links is a
+			// ReplacingMergeTree, so re-inserting an identical balance every
+			// tick still spawns a part that has to be merged and dropped —
+			// pure churn against the disk for data that did not change.
+			if lw.Balance != nil && bal != nil && lw.Balance.Cmp(bal) == 0 {
+				return
+			}
 			mu.Lock()
 			updates = append(updates, clickhouse.BalanceUpdate{
 				Wallet:     lw.Wallet,
@@ -101,11 +108,15 @@ func (r *Refresher) refreshWallets(ctx context.Context, wallets []clickhouse.Lin
 	}
 	wg.Wait()
 
+	if len(updates) == 0 {
+		r.log.Infow("balances refreshed", "wallets", len(wallets), "changed", 0)
+		return
+	}
 	if err := r.ch.UpsertBalances(ctx, updates); err != nil {
 		r.log.Errorw("upsert balances failed", "err", err)
 		return
 	}
-	r.log.Infow("balances refreshed", "wallets", len(wallets), "updated", len(updates))
+	r.log.Infow("balances refreshed", "wallets", len(wallets), "changed", len(updates))
 }
 
 func retryBalance(ctx context.Context, fn func() (*big.Int, error)) (*big.Int, error) {

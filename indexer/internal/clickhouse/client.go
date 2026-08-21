@@ -290,11 +290,14 @@ type LinkedWallet struct {
 	Wallet     string
 	AccountUID string
 	LinkedAt   time.Time
+	// Balance as currently stored, so the refresher can tell whether a freshly
+	// fetched balance is actually different before writing a new row.
+	Balance *big.Int
 }
 
 func (c *Client) ListLinkedWallets(ctx context.Context) ([]LinkedWallet, error) {
 	rows, err := c.conn.Query(ctx, `
-		SELECT wallet, account_uid, linked_at
+		SELECT wallet, account_uid, linked_at, balance_ngonka
 		FROM gonka_vote.wallet_links FINAL
 		WHERE unlinked_at IS NULL
 	`)
@@ -305,7 +308,7 @@ func (c *Client) ListLinkedWallets(ctx context.Context) ([]LinkedWallet, error) 
 	var out []LinkedWallet
 	for rows.Next() {
 		var lw LinkedWallet
-		if err := rows.Scan(&lw.Wallet, &lw.AccountUID, &lw.LinkedAt); err != nil {
+		if err := rows.Scan(&lw.Wallet, &lw.AccountUID, &lw.LinkedAt, &lw.Balance); err != nil {
 			return nil, err
 		}
 		out = append(out, lw)
@@ -315,7 +318,7 @@ func (c *Client) ListLinkedWallets(ctx context.Context) ([]LinkedWallet, error) 
 
 func (c *Client) ListLinkedWalletsForUID(ctx context.Context, uid string) ([]LinkedWallet, error) {
 	rows, err := c.conn.Query(ctx, `
-		SELECT wallet, account_uid, linked_at
+		SELECT wallet, account_uid, linked_at, balance_ngonka
 		FROM gonka_vote.wallet_links FINAL
 		WHERE unlinked_at IS NULL AND account_uid = ?
 	`, uid)
@@ -326,7 +329,7 @@ func (c *Client) ListLinkedWalletsForUID(ctx context.Context, uid string) ([]Lin
 	var out []LinkedWallet
 	for rows.Next() {
 		var lw LinkedWallet
-		if err := rows.Scan(&lw.Wallet, &lw.AccountUID, &lw.LinkedAt); err != nil {
+		if err := rows.Scan(&lw.Wallet, &lw.AccountUID, &lw.LinkedAt, &lw.Balance); err != nil {
 			return nil, err
 		}
 		out = append(out, lw)

@@ -351,9 +351,56 @@ async def upsert_proposal(ch: CHClient, raw: dict[str, Any]) -> None:
 # Votes / deposits — full replace per proposal
 # ----------------------------------------------------------------------------
 
+def _votes_fingerprint(rows: list[tuple[Any, ...]]) -> str:
+    """Order-independent digest of a vote/deposit set, for change detection."""
+    return json.dumps(sorted(str(r) for r in rows), ensure_ascii=False)
+
+
 async def upsert_votes(ch: CHClient, proposal_id: int, votes: list[dict[str, Any]]) -> None:
     if not votes:
         return
+
+    # The poller re-pulls every active proposal's votes each tick, but votes
+    # only move when someone actually casts one. The DELETE below is a
+    # mutation — the most expensive write ClickHouse has, rewriting whole
+    # parts — so compare the incoming set against what's stored and bail out
+    # when they match. Sorted digests make the comparison order-independent,
+    # since the tracker API doesn't guarantee ordering.
+    incoming = _votes_fingerprint([
+        (
+            str(v.get("voter") or ""),
+            str(v.get("option") or ""),
+            float(v.get("weight") or 0.0),
+            str(v.get("voting_power") or 0),
+            int(v.get("voted_height") or 0),
+            str(v.get("tx_hash") or ""),
+        )
+        for v in votes
+    ])
+    try:
+        stored_rows = await ch.query_rows(
+            "SELECT voter, option, weight, voting_power, voted_height, tx_hash "
+            "FROM gonka_vote.gov_votes FINAL WHERE proposal_id = {pid:UInt64}",
+            {"pid": proposal_id},
+        )
+        stored = _votes_fingerprint([
+            (
+                str(r.get("voter") or ""),
+                str(r.get("option") or ""),
+                float(r.get("weight") or 0.0),
+                str(r.get("voting_power") or 0),
+                int(r.get("voted_height") or 0),
+                str(r.get("tx_hash") or ""),
+            )
+            for r in stored_rows
+        ])
+        if stored_rows and stored == incoming:
+            return
+    except Exception as e:
+        # Never let the comparison itself block the refresh — fall through and
+        # write, which is the old behaviour.
+        logger.warning("gov_votes change check for %s failed: %s", proposal_id, e)
+
     # Wipe stale rows for this proposal before inserting the fresh snapshot.
     # The PK is (proposal_id, voter, option), so a voter who switched options
     # (e.g. ABSTAIN → YES) or shrank from a 4-row MsgVoteWeighted to a
@@ -392,6 +439,37 @@ async def upsert_votes(ch: CHClient, proposal_id: int, votes: list[dict[str, Any
 async def upsert_deposits(ch: CHClient, proposal_id: int, deposits: list[dict[str, Any]]) -> None:
     if not deposits:
         return
+
+    # Deposits are append-only in practice and re-pulled every tick; skip the
+    # write when the stored set already matches (same reasoning as
+    # upsert_votes, minus the mutation).
+    incoming = _votes_fingerprint([
+        (
+            str(d.get("depositor") or ""),
+            str(d.get("amount_ngonka") or 0),
+            str(d.get("tx_hash") or ""),
+        )
+        for d in deposits
+    ])
+    try:
+        stored_rows = await ch.query_rows(
+            "SELECT depositor, amount, tx_hash FROM gonka_vote.gov_deposits FINAL "
+            "WHERE proposal_id = {pid:UInt64}",
+            {"pid": proposal_id},
+        )
+        stored = _votes_fingerprint([
+            (
+                str(r.get("depositor") or ""),
+                str(r.get("amount") or 0),
+                str(r.get("tx_hash") or ""),
+            )
+            for r in stored_rows
+        ])
+        if stored_rows and stored == incoming:
+            return
+    except Exception as e:
+        logger.warning("gov_deposits change check for %s failed: %s", proposal_id, e)
+
     now = datetime.now(timezone.utc)
     epoch = datetime.fromtimestamp(0, tz=timezone.utc)
     rows = [
