@@ -1,65 +1,35 @@
 <?xml version="1.0"?>
 <!--
-  System log tables: high-volume ones disabled, the rest kept with a 1-day TTL.
+  All ClickHouse system log tables disabled.
 
-  Disabled via <name remove="1"/>: text_log, trace_log, metric_log,
-  asynchronous_metric_log, processors_profile_log, query_metric_log.
+  Why: with application writes gated on real changes, system logs were the
+  only thing still touching this disk. query_log was the last one left and
+  was still taking ~800 rows / 10 min — not from real work, but from the
+  translator and notifier polling their job queues every 5 s. Each flush
+  writes a fresh part that then has to be merged and dropped, so a table of
+  pure polling noise kept the disk busy around the clock.
 
-  Why: this server holds ~245 MiB of actual data, but those tables held
-  ~290 MiB between them and text_log alone was writing ~48 rows/s of engine
-  telemetry (MergeTreeSequentialSource, MemoryTracker, per-SELECT pipeline
-  traces). With application writes now gated on real changes, system logs
-  had become essentially the only thing touching the disk — ~3900 write ops
-  per minute for data nobody reads. TTL bounds retention but not the write
-  rate, so the collection itself is what had to go.
+  That churn is billed: Azure meters managed-disk operations at the block
+  layer, and gonkavote was drawing ~11.8 ops/s (≈21M ops/month) around the
+  clock while proxy and epoch — same image, same mount options, no
+  ClickHouse — sit at 0.4-1.25 ops/s. The gap is what these tables cost.
 
-  Kept: query_log and part_log (used to diagnose write churn — see the
-  gov_* upsert change-detection work; both are low-volume: ~140k and ~33k
-  rows vs millions for the disabled ones) and error_log (tiny, and the
-  first place to look when something breaks).
+  Earlier rounds disabled the high-volume ones (text_log, trace_log,
+  metric_log, asynchronous_metric_log, processors_profile_log,
+  query_metric_log) and dropped their accumulated data; metric_log in
+  particular has 1136 columns and its merges failed continuously with
+  MEMORY_LIMIT_EXCEEDED, spraying stack traces into the server log at
+  ~2 GiB/day. This file now covers every remaining one.
 
-  Re-enable temporarily by dropping the corresponding remove="1" line and
-  restarting the server if deep engine tracing is ever needed.
+  Trade-off: no query_log means no post-hoc "what wrote to this table and
+  when" — the exact tool used to find all of the above. Re-enable it (drop
+  its remove="1" and restart) whenever that question comes up again; it is
+  cheap to turn back on for a diagnostic window.
 
-  The 1-day TTL notes below still apply to the tables that remain enabled.
-
-  Applied via config.d (NOT a one-off ALTER migration) so the TTL is
-  re-asserted on every server start AND on every freshly created log table.
-  That matters because ClickHouse rotates a system log table (renames it to
-  <name>_N and creates a new one) whenever its column set changes across a
-  version upgrade — a one-time ALTER would be lost on the new table, but a
-  config TTL is applied to it automatically.
-
-  Rules followed (see ClickHouse #34929 and the system-tables docs):
-    * Use individual <partition_by>/<order_by>/<ttl> tags — NOT <engine>.
-      Mixing <engine> with <ttl>/<partition_by> makes the server throw and
-      exit at startup.
-    * partition_by/order_by MUST match the table's existing schema exactly,
-      otherwise ClickHouse treats it as a different table and rotates it
-      (the <name>_N duplication bug). Values below were read from
-      system.tables on 24.12.
-    * Do NOT put <ttl_only_drop_parts> / SETTINGS here — a differing SETTINGS
-      is itself enough to trigger the rotation/duplication. Plain row TTL is
-      sufficient to bound disk usage.
-
-  All tables: PARTITION BY toYYYYMMDD(event_date), ORDER BY (event_date, event_time)
-  except asynchronous_metric_log which orders by (metric, event_date, event_time).
-
-  NOTE: partition is per-DAY, not per-month. The 24.12 default is
-  toYYYYMM(event_date) — one part per month — and row-level TTL only fires
-  on a merge of that part. With a busy text_log (~65 lines/s here), the
-  live monthly partition grew to 962 MiB / 16.8M rows in 3 days, holding
-  the corresponding mark + uncompressed cache in CH memory the whole time
-  and pushing MemoryTracking close to its limit. Per-day partitions let
-  TTL cleanly drop yesterday's whole partition the next day — disk +
-  memory capped at ~1 day of logs as intended.
+  Server-level logging verbosity is separate — see logger.xml.
 -->
 <clickhouse>
-    <query_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </query_log>
+    <query_log remove="1"/>
 
     <trace_log remove="1"/>
 
@@ -67,21 +37,21 @@
 
     <metric_log remove="1"/>
 
-    <part_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </part_log>
+    <part_log remove="1"/>
 
     <processors_profile_log remove="1"/>
 
     <asynchronous_metric_log remove="1"/>
 
-    <error_log>
-        <partition_by>toYYYYMMDD(event_date)</partition_by>
-        <order_by>event_date, event_time</order_by>
-        <ttl>event_date + INTERVAL 1 DAY DELETE</ttl>
-    </error_log>
+    <error_log remove="1"/>
 
     <query_metric_log remove="1"/>
+    <query_thread_log remove="1"/>
+    <query_views_log remove="1"/>
+    <asynchronous_insert_log remove="1"/>
+    <backup_log remove="1"/>
+    <blob_storage_log remove="1"/>
+    <s3queue_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <crash_log remove="1"/>
 </clickhouse>
