@@ -218,9 +218,25 @@ async def me_optional(user: Optional[dict] = Depends(current_user_optional)) -> 
 @router.patch("/me")
 async def update_me(payload: UserUpdate, user: dict = Depends(current_user)) -> UserOut:
     ch = _ensure_ch()
+    # `users` is a ReplacingMergeTree(updated_at), so this insert replaces the
+    # whole row — any column left out silently falls back to its DDL DEFAULT.
+    # notifications_disabled defaults to false, so omitting it here would
+    # re-subscribe anyone who had opted out, just because they edited their
+    # wallet address. current_user() doesn't select that column, so read it
+    # back explicitly and carry it forward (same read-modify-write shape as
+    # set_user_opt_out() in notifications.py).
+    opted_out = await ch.query_scalar(
+        """
+        SELECT notifications_disabled
+        FROM gonka_vote.users FINAL
+        WHERE email = {email:String}
+        """,
+        {"email": user["email"]},
+    )
     await ch.insert(
         "users",
-        ["email", "name", "image", "wallet_address", "uid", "is_admin"],
+        ["email", "name", "image", "wallet_address", "uid", "is_admin",
+         "notifications_disabled"],
         [[
             user["email"],
             user.get("name"),
@@ -228,6 +244,7 @@ async def update_me(payload: UserUpdate, user: dict = Depends(current_user)) -> 
             payload.wallet_address,
             user["uid"],
             bool(user.get("is_admin")),
+            bool(opted_out),
         ]],
     )
     refreshed = await ch.query_one(
