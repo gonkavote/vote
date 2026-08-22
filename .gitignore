@@ -36,3 +36,6 @@ client_secret_*.json
 contract/artifacts/
 contract/target/
 contract/Cargo.lock
+
+docker-compose.override.yml
+docker-compose.override.yaml
