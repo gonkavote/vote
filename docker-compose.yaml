@@ -1,5 +1,20 @@
+# Cap container logs. Docker's json-file driver is unbounded by default, so a
+# service that starts erroring in a loop grows its log until the disk fills.
+# 20 MB x 3 keeps roughly a week of output here — these services log per user
+# action, not per poll, so they stay well inside it.
+#
+# Compose has no project-wide default, so each service opts in via <<: *logging
+# and a new service needs the line too.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
+
 services:
   traefik:
+    <<: *logging
     image: traefik:v3.6.2
     command:
       - "--providers.docker=true"
@@ -21,6 +36,7 @@ services:
         condition: service_healthy
 
   clickhouse:
+    <<: *logging
     image: clickhouse/clickhouse-server:24.12
     container_name: gonka-vote-clickhouse
     environment:
@@ -51,6 +67,7 @@ services:
     restart: unless-stopped
 
   indexer:
+    <<: *logging
     build:
       context: ./indexer
       dockerfile: Dockerfile
@@ -83,6 +100,7 @@ services:
     restart: unless-stopped
 
   backend:
+    <<: *logging
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -160,6 +178,7 @@ services:
       - "traefik.http.routers.vote-backend-sitemap.service=vote-backend"
 
   translator:
+    <<: *logging
     # Same image as backend (shares the `backend` package); just a different
     # entrypoint. Polls translation_jobs in ClickHouse and writes translated
     # text into proposals.*_t / comments.body_t. Not exposed to traefik.
@@ -187,6 +206,7 @@ services:
     restart: unless-stopped
 
   notifier:
+    <<: *logging
     # Same image as backend; entrypoint is `python -m backend.notifier`.
     # Polls notification_jobs and sends Telegram bot messages via Bot API.
     # Not exposed to traefik.
@@ -220,6 +240,7 @@ services:
     restart: unless-stopped
 
   backup:
+    <<: *logging
     # Daily ClickHouse dump → gzipped tarball → Cloudflare R2. Skipped if
     # R2_* env vars are empty (see backup.sh — it exits with an error which
     # docker restarts, so keep them set once configured).
@@ -246,6 +267,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    <<: *logging
     build:
       context: ./frontend
       dockerfile: Dockerfile
