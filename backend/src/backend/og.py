@@ -19,7 +19,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
 from backend.auth import _ensure_ch  # type: ignore
 from backend.settings import settings
@@ -47,7 +47,11 @@ SITE_BASE = _site_base()
 # HTML template — same shell for every page; only meta + body content varies.
 # ----------------------------------------------------------------------------
 
-def _render(*, title: str, description: str, url: str, body: str) -> str:
+INDEX = "index, follow, max-image-preview:large"
+NOINDEX = "noindex, follow"
+
+
+def _render(*, title: str, description: str, url: str, body: str, robots: str = INDEX) -> str:
     t = html.escape(title)
     d = html.escape(description)
     u = html.escape(url)
@@ -56,9 +60,15 @@ def _render(*, title: str, description: str, url: str, body: str) -> str:
         f"<meta charset=\"utf-8\">"
         f"<title>{t}</title>"
         f"<meta name=\"description\" content=\"{d}\">"
-        f"<meta name=\"robots\" content=\"index, follow, max-image-preview:large\">"
+        f"<meta name=\"robots\" content=\"{robots}\">"
         f"<meta name=\"author\" content=\"Gonka Vote\">"
         f"<link rel=\"canonical\" href=\"{u}\">"
+        # Google picks a site's search-result icon from the <link rel=icon>
+        # on the homepage -- and crawlers get the homepage from here, not the
+        # SPA, so without these it fell back to /favicon.ico.
+        f"<link rel=\"icon\" href=\"{SITE_BASE}/favicon.ico\" sizes=\"any\">"
+        f"<link rel=\"icon\" type=\"image/png\" sizes=\"48x48\" href=\"{SITE_BASE}/favicon-48x48.png\">"
+        f"<link rel=\"icon\" type=\"image/svg+xml\" href=\"{SITE_BASE}/images/logo.svg\">"
         f"<meta property=\"og:site_name\" content=\"Gonka Vote\">"
         f"<meta property=\"og:type\" content=\"article\">"
         f"<meta property=\"og:url\" content=\"{u}\">"
@@ -70,6 +80,38 @@ def _render(*, title: str, description: str, url: str, body: str) -> str:
         f"<meta name=\"twitter:description\" content=\"{d}\">"
         f"<meta name=\"twitter:image\" content=\"{SITE_BASE}/images/prev.jpg\">"
         f"</head><body>{body}</body></html>"
+    )
+
+
+def _not_found() -> HTMLResponse:
+    """404 for an id that does not resolve to a proposal.
+
+    These routes used to answer 200 with the site-wide title and a canonical
+    pointing at the bad URL, which Google files as a soft 404 -- and every
+    typo or deleted proposal became an indexable thin page.
+    """
+    return HTMLResponse(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<title>Not found — Gonka Vote</title>"
+        "<meta name=\"robots\" content=\"noindex\">"
+        "</head><body><h1>Not found</h1></body></html>",
+        status_code=404,
+        headers={"Cache-Control": "public, max-age=60"},
+    )
+
+
+def _unavailable() -> HTMLResponse:
+    """503 when the lookup itself failed.
+
+    A database hiccup is not evidence the page is gone, so it must not look
+    like either a real page or a 404: 503 with Retry-After tells the crawler
+    to come back instead of indexing or dropping the URL.
+    """
+    return HTMLResponse(
+        "<!doctype html><html><head><meta name=\"robots\" content=\"noindex\"></head>"
+        "<body>Temporarily unavailable</body></html>",
+        status_code=503,
+        headers={"Retry-After": "300", "Cache-Control": "no-store"},
     )
 
 
@@ -128,11 +170,14 @@ async def og_home(request: Request) -> HTMLResponse:
 @og_router.get("/proposal/{proposal_id}", response_class=HTMLResponse)
 async def og_proposal(proposal_id: str, request: Request) -> HTMLResponse:
     url = f"{SITE_BASE}/proposal/{proposal_id}"
-    fallback_body = f"<a href=\"{html.escape(url)}\">{html.escape(DEFAULT_TITLE)}</a>"
-    fallback = HTMLResponse(
-        _render(title=DEFAULT_TITLE, description=DEFAULT_DESCRIPTION, url=url, body=fallback_body),
-        headers={"Cache-Control": "public, max-age=60"},
-    )
+    # /proposal/new is the composer, which this route shadows before the
+    # catch-all can see it. It exists, it is just not content.
+    if proposal_id == "new":
+        return HTMLResponse(
+            _render(title=DEFAULT_TITLE, description=DEFAULT_DESCRIPTION, url=url,
+                    body="", robots=NOINDEX),
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
     try:
         UUID(proposal_id)
         where_clause = "id = {id:UUID}"
@@ -143,7 +188,7 @@ async def og_proposal(proposal_id: str, request: Request) -> HTMLResponse:
         if len(proposal_id) != 6 or not all(
             c in "abcdefghijklmnopqrstuvwxyz0123456789" for c in proposal_id
         ):
-            return fallback
+            return _not_found()
         where_clause = "short_id = {sid:String}"
         params = {"sid": proposal_id}
     try:
@@ -158,9 +203,9 @@ async def og_proposal(proposal_id: str, request: Request) -> HTMLResponse:
         )
     except Exception as e:
         logger.warning("og proposal %s: %s", proposal_id, e)
-        return fallback
+        return _unavailable()
     if not row:
-        return fallback
+        return _not_found()
 
     title = (row.get("title") or "").strip() or DEFAULT_TITLE
     summary = (row.get("summary") or "").strip()
@@ -218,11 +263,6 @@ async def og_governance_list(request: Request) -> HTMLResponse:
 @og_router.get("/governance/{proposal_id:int}", response_class=HTMLResponse)
 async def og_governance_proposal(proposal_id: int, request: Request) -> HTMLResponse:
     url = f"{SITE_BASE}/governance/{proposal_id}"
-    fallback_body = f"<a href=\"{html.escape(url)}\">Proposal #{proposal_id}</a>"
-    fallback = HTMLResponse(
-        _render(title=DEFAULT_TITLE, description=DEFAULT_DESCRIPTION, url=url, body=fallback_body),
-        headers={"Cache-Control": "public, max-age=60"},
-    )
     try:
         ch = _ensure_ch()
         row = await ch.query_one(
@@ -235,9 +275,9 @@ async def og_governance_proposal(proposal_id: int, request: Request) -> HTMLResp
         )
     except Exception as e:
         logger.warning("og gov proposal %s: %s", proposal_id, e)
-        return fallback
+        return _unavailable()
     if not row:
-        return fallback
+        return _not_found()
 
     raw_title = (row.get("title") or "").strip() or f"Proposal #{proposal_id}"
     title = f"#{proposal_id} {raw_title} — Gonka Governance"
@@ -320,3 +360,132 @@ async def sitemap() -> Response:
         media_type="application/xml",
         headers={"Cache-Control": "public, max-age=600"},
     )
+
+
+# ----------------------------------------------------------------------------
+# robots.txt — served here rather than as a static file so the Sitemap line
+# can be absolute: the sitemaps.org protocol requires a fully qualified URL,
+# and only the backend knows the deployment's public origin
+# (PUBLIC_BASE_URL). A static file would have to hard-code one site's domain.
+# ----------------------------------------------------------------------------
+
+_AI_TRAINING_CRAWLERS = (
+    "GPTBot",
+    "ClaudeBot",
+    "Google-Extended",
+    "anthropic-ai",
+    "CCBot",
+    "Bytespider",
+    "meta-externalagent",
+    "Amazonbot",
+    "Applebot-Extended",
+    "PerplexityBot",
+)
+
+
+@og_router.get("/robots.txt", include_in_schema=False)
+async def robots_txt() -> PlainTextResponse:
+    lines = [
+        "# Default: allow all crawlers everywhere.",
+        "User-agent: *",
+        "Allow: /",
+        "",
+        "# Block AI training crawlers (we still allow Googlebot/Bingbot/etc.).",
+    ]
+    for agent in _AI_TRAINING_CRAWLERS:
+        lines += [f"User-agent: {agent}", "Disallow: /", ""]
+    lines.append(f"Sitemap: {SITE_BASE}/sitemap.xml")
+    return PlainTextResponse(
+        "\n".join(lines) + "\n",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+# ----------------------------------------------------------------------------
+# Static pages and member profiles. Crawlers used to get these from the SPA
+# shell, whose canonical is "/" on every path, so each of them declared itself
+# a duplicate of the homepage.
+# ----------------------------------------------------------------------------
+
+@og_router.get("/privacy", response_class=HTMLResponse)
+async def og_privacy() -> HTMLResponse:
+    url = f"{SITE_BASE}/privacy"
+    return HTMLResponse(
+        _render(
+            title="Privacy Policy — Gonka Vote",
+            description="How Gonka Vote collects, uses and stores personal data.",
+            url=url,
+            body=f"<h1>Privacy Policy</h1><p><a href=\"{html.escape(url)}\">Gonka Vote privacy policy</a></p>",
+        ),
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@og_router.get("/terms", response_class=HTMLResponse)
+async def og_terms() -> HTMLResponse:
+    url = f"{SITE_BASE}/terms"
+    return HTMLResponse(
+        _render(
+            title="Terms of Service — Gonka Vote",
+            description="The terms that govern use of Gonka Vote.",
+            url=url,
+            body=f"<h1>Terms of Service</h1><p><a href=\"{html.escape(url)}\">Gonka Vote terms of service</a></p>",
+        ),
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@og_router.get("/u/{uid}", response_class=HTMLResponse)
+async def og_profile(uid: str) -> HTMLResponse:
+    # No database lookup: the users table also holds e-mail addresses, and a
+    # profile adds little a search result needs. noindex keeps member
+    # activity out of search while "follow" still passes the proposal links.
+    url = f"{SITE_BASE}/u/{uid}"
+    return HTMLResponse(
+        _render(
+            title="Member profile — Gonka Vote",
+            description=DEFAULT_DESCRIPTION,
+            url=url,
+            body="<h1>Member profile</h1>",
+            robots=NOINDEX,
+        ),
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+# ----------------------------------------------------------------------------
+# Everything else a crawler asks for. Must stay the LAST route in this module,
+# and og_router must stay the last router in app.py: a catch-all registered
+# earlier would shadow every route after it.
+# ----------------------------------------------------------------------------
+
+# SPA screens that exist but are app UI, not content.
+_APP_SCREENS = {"me", "proposal/new"}
+
+
+@og_router.get("/{path:path}", include_in_schema=False)
+async def og_fallback(path: str):
+    # A trailing slash lands here before FastAPI's own slash redirect can
+    # run, so /terms/ would 404. Send it to the canonical form instead and
+    # let the real route answer.
+    if path.endswith("/") and path.strip("/"):
+        return RedirectResponse(f"/{path.strip('/')}", status_code=301)
+    path = path.strip("/")
+    # Mirror the SPA's permanent /tenders -> /proposal redirects so crawlers
+    # routed here get the same 301 browsers get from nginx.
+    if path == "tenders":
+        return RedirectResponse("/", status_code=301)
+    if path == "tenders/new":
+        return RedirectResponse("/proposal/new", status_code=301)
+    if path.startswith("tenders/"):
+        return RedirectResponse(f"/proposal/{path[len('tenders/'):]}", status_code=301)
+    if path in _APP_SCREENS:
+        url = f"{SITE_BASE}/{path}"
+        return HTMLResponse(
+            _render(title=DEFAULT_TITLE, description=DEFAULT_DESCRIPTION, url=url,
+                    body="", robots=NOINDEX),
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+    # No database work here: crawlers probing junk URLs must not load the
+    # database.
+    return _not_found()

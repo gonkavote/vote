@@ -176,6 +176,21 @@ services:
       - "traefik.http.routers.vote-backend-sitemap.entrypoints=web"
       - "traefik.http.routers.vote-backend-sitemap.priority=210"
       - "traefik.http.routers.vote-backend-sitemap.service=vote-backend"
+      # robots.txt comes from the backend too, so its Sitemap line can be the
+      # absolute URL the protocol requires, built from PUBLIC_BASE_URL.
+      - "traefik.http.routers.vote-backend-robots.rule=Host(`${PUBLIC_HOST:-localhost}`) && Path(`/robots.txt`)"
+      - "traefik.http.routers.vote-backend-robots.entrypoints=web"
+      - "traefik.http.routers.vote-backend-robots.priority=210"
+      - "traefik.http.routers.vote-backend-robots.service=vote-backend"
+      # Every other page path a crawler requests (no dot, so static files stay
+      # on nginx) goes to the SSR too: /privacy, /terms, profiles, app screens
+      # and unknown paths, which answer 404 instead of the SPA shell's 200 with
+      # canonical "/". Priority sits below /api (100) so API calls are never
+      # captured, and above the frontend (1).
+      - "traefik.http.routers.vote-backend-og-fallback.rule=Host(`${PUBLIC_HOST:-localhost}`) && PathRegexp(`^/[^.]*$`) && HeaderRegexp(`User-Agent`, `(?i).*(bot|crawler|spider|facebookexternalhit|telegrambot|whatsapp|slackbot|discordbot|preview|embed|skype|bingpreview|outbrain|pinterest|google|baidu|yandex|duckduckgo|qwant|petalbot|seznambot|applebot).*`)"
+      - "traefik.http.routers.vote-backend-og-fallback.entrypoints=web"
+      - "traefik.http.routers.vote-backend-og-fallback.priority=50"
+      - "traefik.http.routers.vote-backend-og-fallback.service=vote-backend"
 
   translator:
     <<: *logging
