@@ -7,7 +7,7 @@ import { StatusBadge } from '../components/governance/StatusBadge'
 import { TallyBar } from '../components/governance/TallyBar'
 import { TranslatedText } from '../components/TranslatedText'
 import { compactBig, formatRelative } from '../lib/format'
-import { humanMsgLabel } from '../lib/msgTypes'
+import { groupMsgTypes, humanMsgLabel } from '../lib/msgTypes'
 
 // Reduced set: chain also exposes 'deposit' and 'failed', but they're rare
 // and noisy on the index. Showing 4 tabs keeps the focus on what users
@@ -172,7 +172,9 @@ export function GovernanceListPage() {
                 </div>
                 {p.msg_types.length > 0 && (
                   <div className="text-[11px] text-text-2 mt-1 break-words leading-relaxed">
-                    {p.msg_types.map((m) => humanMsgLabel(m, t)).join(', ')}
+                    {groupMsgTypes(p.msg_types)
+                      .map((g) => (g.count > 1 ? `${humanMsgLabel(g.type, t)} ×${g.count}` : humanMsgLabel(g.type, t)))
+                      .join(', ')}
                   </div>
                 )}
               </div>

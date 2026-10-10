@@ -139,3 +139,23 @@ export function humanMsgLabel(typeUrl: string, t: TFunction): string {
   }
   return fallbackLabel(typeUrl)
 }
+
+/**
+ * Collapse repeated message types into {type, count}, in order of first
+ * appearance — a proposal with 16 MsgExecuteContract reads as one
+ * "Execute contract ×16".
+ */
+export function groupMsgTypes(types: string[]): { type: string; count: number }[] {
+  const out: { type: string; count: number }[] = []
+  const at = new Map<string, number>()
+  for (const t of types) {
+    const i = at.get(t)
+    if (i === undefined) {
+      at.set(t, out.length)
+      out.push({ type: t, count: 1 })
+    } else {
+      out[i].count++
+    }
+  }
+  return out
+}

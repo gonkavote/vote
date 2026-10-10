@@ -23,7 +23,7 @@ import {
   type TranslationMode,
 } from '../components/TranslatedText'
 import { compactBig, formatDateTime, formatRelative } from '../lib/format'
-import { humanMsgLabel } from '../lib/msgTypes'
+import { groupMsgTypes, humanMsgLabel } from '../lib/msgTypes'
 import { linkify } from '../lib/linkify'
 
 type Tab = 'discussion' | 'details' | 'votes' | 'deposits' | 'json'
@@ -72,11 +72,12 @@ export function GovernanceDetailPage() {
                   {t('governance.expedited')}
                 </span>
               )}
-              {p.msg_types.map((m) => (
-                <span key={m}
+              {groupMsgTypes(p.msg_types).map((g) => (
+                <span key={g.type}
                       className="pill bg-white/5 text-text-2 text-[10px]"
-                      title={m}>
-                  {humanMsgLabel(m, t)}
+                      title={g.type}>
+                  {humanMsgLabel(g.type, t)}
+                  {g.count > 1 && <span className="ml-1 text-text font-medium">×{g.count}</span>}
                 </span>
               ))}
               <span className="text-xs text-text-2">#{p.proposal_id}</span>
