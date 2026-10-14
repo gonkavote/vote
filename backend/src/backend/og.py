@@ -21,6 +21,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
+from backend import og_images
 from backend.auth import _ensure_ch  # type: ignore
 from backend.settings import settings
 
@@ -51,7 +52,15 @@ INDEX = "index, follow, max-image-preview:large"
 NOINDEX = "noindex, follow"
 
 
-def _render(*, title: str, description: str, url: str, body: str, robots: str = INDEX) -> str:
+# Share images: the site's own pages have static cards in
+# frontend/public/images/preview/; proposals get theirs drawn from their data
+# (og_images.py, /api/og/... below).
+SITE_IMAGE = f"{SITE_BASE}/images/preview/gonka-vote.jpg"
+GOVERNANCE_IMAGE = f"{SITE_BASE}/images/preview/governance.jpg"
+
+
+def _render(*, title: str, description: str, url: str, body: str, robots: str = INDEX,
+            image: str = SITE_IMAGE) -> str:
     t = html.escape(title)
     d = html.escape(description)
     u = html.escape(url)
@@ -74,11 +83,11 @@ def _render(*, title: str, description: str, url: str, body: str, robots: str = 
         f"<meta property=\"og:url\" content=\"{u}\">"
         f"<meta property=\"og:title\" content=\"{t}\">"
         f"<meta property=\"og:description\" content=\"{d}\">"
-        f"<meta property=\"og:image\" content=\"{SITE_BASE}/images/prev.jpg\">"
+        f"<meta property=\"og:image\" content=\"{html.escape(image)}\">"
         f"<meta name=\"twitter:card\" content=\"summary_large_image\">"
         f"<meta name=\"twitter:title\" content=\"{t}\">"
         f"<meta name=\"twitter:description\" content=\"{d}\">"
-        f"<meta name=\"twitter:image\" content=\"{SITE_BASE}/images/prev.jpg\">"
+        f"<meta name=\"twitter:image\" content=\"{html.escape(image)}\">"
         f"</head><body>{body}</body></html>"
     )
 
@@ -192,15 +201,7 @@ async def og_proposal(proposal_id: str, request: Request) -> HTMLResponse:
         where_clause = "short_id = {sid:String}"
         params = {"sid": proposal_id}
     try:
-        ch = _ensure_ch()
-        row = await ch.query_one(
-            f"""
-            SELECT title, summary, description
-            FROM gonka_vote.proposals FINAL
-            WHERE {where_clause} AND deleted_at IS NULL
-            """,
-            params,
-        )
+        row = await _proposal_row(where_clause, params)
     except Exception as e:
         logger.warning("og proposal %s: %s", proposal_id, e)
         return _unavailable()
@@ -209,17 +210,76 @@ async def og_proposal(proposal_id: str, request: Request) -> HTMLResponse:
 
     title = (row.get("title") or "").strip() or DEFAULT_TITLE
     summary = (row.get("summary") or "").strip()
-    desc = summary or DEFAULT_DESCRIPTION
+    # The facts the preview card shows, ahead of the summary.
+    closed = og_images.proposal_closed(row)
+    facts = []
+    if row.get("closes_at"):
+        facts.append(f"{'Closed' if closed else 'Open until'} {og_images._when(row['closes_at'])}")
+    else:
+        facts.append("Closed" if closed else "Open")
+    usdt = int(row.get("requested_amount_usdt") or 0)
+    gnk = int(row.get("requested_amount_gnk") or 0)
+    if usdt:
+        facts.append(f"requests {usdt:,} USDT")
+    if gnk:
+        facts.append(f"requests {gnk:,} GNK")
+    if row.get("creator_name"):
+        facts.append(f"by {row['creator_name']}")
+    desc = " · ".join(facts) + ". " + (summary or DEFAULT_DESCRIPTION)
     body_text = (row.get("description") or "").strip()
     body = (
         f"<h1>{html.escape(title)}</h1>"
         f"<p>{html.escape(_short(summary, 320))}</p>"
         f"<div>{html.escape(_short(body_text, 1500))}</div>"
     )
+    slug = row.get("short_id") or str(row["id"])
     return HTMLResponse(
-        _render(title=title, description=_short(desc, 200), url=url, body=body),
+        _render(title=title, description=_short(desc, 200), url=url, body=body,
+                image=f"{SITE_BASE}/api/og/proposal/{slug}.png"),
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+async def _proposal_row(where_clause: str, params: dict) -> Optional[dict]:
+    """A community proposal with what its page and preview card show."""
+    ch = _ensure_ch()
+    return await ch.query_one(
+        f"""
+        SELECT t.id AS id, t.short_id AS short_id, t.title AS title,
+               t.summary AS summary, t.description AS description,
+               t.status AS status, t.created_at AS created_at, t.closes_at AS closes_at,
+               toUInt64(t.requested_amount_usdt) AS requested_amount_usdt,
+               toUInt64(t.requested_amount_gnk) AS requested_amount_gnk,
+               u.name AS creator_name
+        FROM gonka_vote.proposals AS t FINAL
+        LEFT JOIN gonka_vote.users AS u FINAL ON u.email = t.creator_email
+        WHERE t.{where_clause} AND t.deleted_at IS NULL
+        """,
+        params,
+    )
+
+
+async def _proposal_weights(proposal_id: str) -> dict:
+    """GNK weight behind the likes and dislikes of one proposal, as the
+    proposal list computes it (router._REACTIONS_CTE)."""
+    ch = _ensure_ch()
+    row = await ch.query_one(
+        """
+        WITH uid_weights AS (
+            SELECT account_uid, sum(balance_ngonka) AS weight
+            FROM gonka_vote.wallet_links FINAL
+            WHERE unlinked_at IS NULL
+            GROUP BY account_uid
+        )
+        SELECT toString(sumIf(COALESCE(w.weight, toUInt128(0)), r.reaction_type = 'like'))    AS likes_weight,
+               toString(sumIf(COALESCE(w.weight, toUInt128(0)), r.reaction_type = 'dislike')) AS dislikes_weight
+        FROM gonka_vote.proposal_reactions AS r FINAL
+        LEFT JOIN uid_weights AS w ON w.account_uid = r.reactor_uid
+        WHERE r.proposal_id = {id:UUID} AND r.reaction_type != ''
+        """,
+        {"id": proposal_id},
+    )
+    return row or {}
 
 
 @og_router.get("/governance", response_class=HTMLResponse)
@@ -255,7 +315,8 @@ async def og_governance_list(request: Request) -> HTMLResponse:
     except Exception as e:
         logger.warning("og governance list: %s", e)
     return HTMLResponse(
-        _render(title=title, description=desc, url=url, body="".join(body_lines)),
+        _render(title=title, description=desc, url=url, body="".join(body_lines),
+                image=GOVERNANCE_IMAGE),
         headers={"Cache-Control": "public, max-age=300"},
     )
 
@@ -267,7 +328,9 @@ async def og_governance_proposal(proposal_id: int, request: Request) -> HTMLResp
         ch = _ensure_ch()
         row = await ch.query_one(
             """
-            SELECT proposal_id, title, summary, status, proposer
+            SELECT proposal_id, title, summary, status, proposer, msg_types,
+                   submit_time, voting_end_time,
+                   yes_count, no_count, abstain_count, veto_count
             FROM gonka_vote.gov_proposals FINAL
             WHERE proposal_id = {pid:UInt32}
             """,
@@ -282,7 +345,7 @@ async def og_governance_proposal(proposal_id: int, request: Request) -> HTMLResp
     raw_title = (row.get("title") or "").strip() or f"Proposal #{proposal_id}"
     title = f"#{proposal_id} {raw_title} — Gonka Governance"
     summary = (row.get("summary") or "").strip()
-    desc = summary or DEFAULT_DESCRIPTION
+    desc = _gov_facts(row) + " " + (summary or DEFAULT_DESCRIPTION)
     body = (
         f"<h1>#{proposal_id} {html.escape(raw_title)}</h1>"
         f"<p><strong>Status:</strong> {html.escape(row.get('status') or '')} · "
@@ -290,9 +353,94 @@ async def og_governance_proposal(proposal_id: int, request: Request) -> HTMLResp
         f"<div>{html.escape(_short(summary, 1500))}</div>"
     )
     return HTMLResponse(
-        _render(title=title, description=_short(desc, 200), url=url, body=body),
+        _render(title=title, description=_short(desc, 200), url=url, body=body,
+                image=f"{SITE_BASE}/api/og/governance/{proposal_id}.png"),
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+def _gov_facts(row: dict) -> str:
+    """Status line for a governance proposal's preview, as on its card: no
+    live tally (it goes stale in a shared link), the final one once decided."""
+    st = (row.get("status") or "").lower()
+    if st == "voting":
+        lead = (f"Voting until {og_images._when(row['voting_end_time'])}."
+                if row.get("voting_end_time") else "Voting.")
+        names = list(dict.fromkeys(og_images._msg_badge(t).title() for t in row.get("msg_types") or []))
+        if names:
+            lead += " Would execute: " + ", ".join(names[:3]) + ("…" if len(names) > 3 else "") + "."
+        return lead
+    counts = [int(row.get(k) or 0) for k in ("yes_count", "no_count", "abstain_count", "veto_count")]
+    cast = sum(counts)
+    if st in ("passed", "rejected", "failed") and cast > 0:
+        y, n, a, v = (f"{100 * c / cast:.1f}%" for c in counts)
+        return f"{st.title()}: yes {y}, no {n}, abstain {a}, veto {v}."
+    return f"{st.title() or 'Proposal'}."
+
+
+# ----------------------------------------------------------------------------
+# Preview images for proposals (og_images.py). Under /api so Traefik sends
+# every request here, crawler or not.
+# ----------------------------------------------------------------------------
+
+def _png(data: bytes, ttl: float) -> Response:
+    return Response(data, media_type="image/png",
+                    headers={"Cache-Control": f"public, max-age={int(min(ttl, 86400))}"})
+
+
+@og_router.get("/api/og/proposal/{proposal_id}.png", include_in_schema=False)
+async def og_image_proposal(proposal_id: str):
+    try:
+        UUID(proposal_id)
+        where_clause, params = "id = {id:UUID}", {"id": proposal_id}
+    except (ValueError, AttributeError):
+        if len(proposal_id) != 6 or not all(
+            c in "abcdefghijklmnopqrstuvwxyz0123456789" for c in proposal_id
+        ):
+            return RedirectResponse(SITE_IMAGE, status_code=302)
+        where_clause, params = "short_id = {sid:String}", {"sid": proposal_id}
+
+    async def make() -> bytes:
+        row = await _proposal_row(where_clause, params)
+        if not row:
+            raise LookupError(proposal_id)
+        row = dict(row)
+        if og_images.proposal_closed(row):
+            row.update(await _proposal_weights(str(row["id"])))
+        return await og_images.card_proposal(row)
+
+    try:
+        data = await og_images.cached(f"proposal/{proposal_id}", og_images.TTL_LIVE, make)
+    except Exception as e:
+        if not isinstance(e, LookupError):
+            logger.warning("og image proposal %s: %s", proposal_id, e)
+        return RedirectResponse(SITE_IMAGE, status_code=302)
+    return _png(data, og_images.TTL_LIVE)
+
+
+@og_router.get("/api/og/governance/{proposal_id:int}.png", include_in_schema=False)
+async def og_image_governance(proposal_id: int):
+    async def make() -> bytes:
+        row = await _ensure_ch().query_one(
+            """
+            SELECT proposal_id, title, status, msg_types, submit_time, voting_end_time,
+                   yes_count, no_count, abstain_count, veto_count
+            FROM gonka_vote.gov_proposals FINAL
+            WHERE proposal_id = {pid:UInt32}
+            """,
+            {"pid": proposal_id},
+        )
+        if not row:
+            raise LookupError(proposal_id)
+        return await og_images.card_governance(dict(row))
+
+    try:
+        data = await og_images.cached(f"governance/{proposal_id}", og_images.TTL_LIVE, make)
+    except Exception as e:
+        if not isinstance(e, LookupError):
+            logger.warning("og image governance %s: %s", proposal_id, e)
+        return RedirectResponse(GOVERNANCE_IMAGE, status_code=302)
+    return _png(data, og_images.TTL_LIVE)
 
 
 # ----------------------------------------------------------------------------

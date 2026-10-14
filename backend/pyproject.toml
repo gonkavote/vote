@@ -19,6 +19,8 @@ dependencies = [
     "pydantic-settings>=2.3.0",
     "python-multipart>=0.0.9",
     "langdetect>=1.0.9",
+    # Open Graph preview images (og_images.py).
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
