@@ -122,6 +122,58 @@ const KEYS: Record<string, string> = {
   '/inference.inference.MsgRequestThresholdSignature': 'thresholdSignatureRequest',
   '/inference.inference.MsgSubmitPartialSignature': 'partialSignature',
   '/inference.inference.MsgSubmitGroupKeyValidationSignature': 'groupKeyValidation',
+
+  // Gonka — threshold signing / DKG (the bls module; the inference.inference names above are pre-split)
+  '/inference.bls.MsgSubmitDealerPart': 'dkgDealerPart',
+  '/inference.bls.MsgSubmitVerificationVector': 'dkgVerificationVector',
+  '/inference.bls.MsgSubmitPartialSignature': 'partialSignature',
+  '/inference.bls.MsgSubmitGroupKeyValidationSignature': 'groupKeyValidation',
+  '/inference.bls.MsgRespondDealerComplaints': 'dkgRespondComplaints',
+  '/inference.bls.MsgUpdateParams': 'updateParamsBls',
+
+  // Gonka — PoC
+  '/inference.inference.MsgSubmitPocValidationsV2': 'submitPocValidations',
+  '/inference.inference.MsgMLNodeWeightDistribution': 'mlNodeWeightDistribution',
+  '/inference.inference.MsgDeclarePoCIntent': 'declarePocIntent',
+  '/inference.inference.MsgSetPoCDelegation': 'setPocDelegation',
+  '/inference.inference.MsgRefusePoCDelegation': 'refusePocDelegation',
+  '/inference.inference.MsgCreatePoCChallenge': 'pocChallenge',
+  '/inference.inference.MsgPoCChallengeStoreCommit': 'pocChallengeCommit',
+  '/inference.inference.MsgSubmitPoCChallengeValidations': 'pocChallengeValidations',
+
+  // Gonka — participants, models and network
+  '/inference.inference.MsgSubmitNewParticipant': 'registerParticipant',
+  '/inference.inference.MsgSetClaimRecipients': 'setClaimRecipients',
+  '/inference.inference.MsgSubmitUnitOfComputePriceProposal': 'computePriceProposal',
+  '/inference.inference.MsgDeleteGovernanceModel': 'deleteGovernanceModel',
+  '/inference.inference.MsgCreatePartialUpgrade': 'partialUpgrade',
+  '/inference.inference.MsgScheduleMaintenance': 'scheduleMaintenance',
+  '/inference.inference.MsgCancelMaintenance': 'cancelMaintenance',
+
+  // Gonka — devshards
+  '/inference.inference.MsgCreateDevshardEscrow': 'createDevshardEscrow',
+  '/inference.inference.MsgSettleDevshardEscrow': 'settleDevshardEscrow',
+  '/inference.inference.MsgPutDevshardApprovedVersion': 'approveDevshardVersion',
+  '/inference.inference.MsgDeleteDevshardApprovedVersion': 'removeDevshardVersion',
+  '/inference.inference.MsgSetDevshardRequestsEnabled': 'setDevshardRequestsEnabled',
+
+  // Gonka — bridge and tokens
+  '/inference.inference.MsgRequestBridgeMint': 'bridgeMint',
+  '/inference.inference.MsgRequestBridgeWithdrawal': 'bridgeWithdrawal',
+  '/inference.inference.MsgCancelBridgeOperation': 'cancelBridgeOperation',
+  '/inference.inference.MsgGovernanceCancelBridgeOperation': 'governanceCancelBridgeOperation',
+  '/inference.inference.MsgRegisterBridgeAddresses': 'registerBridgeAddresses',
+  '/inference.inference.MsgRegisterLiquidityPool': 'registerLiquidityPool',
+  '/inference.inference.MsgRegisterTokenMetadata': 'registerTokenMetadata',
+  '/inference.inference.MsgApproveBridgeTokenForTrading': 'approveBridgeTokenForTrading',
+  '/inference.inference.MsgRegisterWrappedTokenContract': 'registerWrappedTokenContract',
+  '/inference.inference.MsgMigrateAllWrappedTokens': 'migrateAllWrappedTokens',
+
+  // Gonka — vesting, restrictions, genesis transfer
+  '/inference.streamvesting.MsgTransferWithVesting': 'transferWithVesting',
+  '/inference.restrictions.MsgExecuteEmergencyTransfer': 'emergencyTransfer',
+  '/inference.genesistransfer.MsgTransferOwnership': 'transferOwnership',
+  '/inference.genesistransfer.MsgUpdateParams': 'updateParamsGenesisTransfer',
 }
 
 function fallbackLabel(typeUrl: string): string {
