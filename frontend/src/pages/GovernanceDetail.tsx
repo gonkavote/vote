@@ -130,7 +130,10 @@ export function GovernanceDetailPage() {
             )}
           </header>
 
-          <div className="flex gap-1 border-b border-border overflow-x-auto -mx-5 px-5 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* The baseline is an inset shadow, not a border the active tab's
+              underline overlaps with -mb-px: that 1px overhang made the
+              horizontally scrolling bar scroll vertically too on phones. */}
+          <div className="flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_theme(colors.border)] -mx-5 px-5 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {(['discussion', 'details', 'votes', 'deposits', 'json'] as Tab[]).map((tk) => (
               <button
                 key={tk}
@@ -641,7 +644,7 @@ function DepositsTab({ pid }: { pid: number }) {
 
 function tabCls(active: boolean): string {
   const base =
-    'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors shrink-0 whitespace-nowrap'
+    'px-3 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap'
   return active
     ? `${base} border-accent text-accent`
     : `${base} border-transparent text-text-2 hover:text-text`
