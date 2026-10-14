@@ -14,10 +14,13 @@ from __future__ import annotations
 
 import html
 import logging
+import re
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
@@ -57,6 +60,7 @@ NOINDEX = "noindex, follow"
 # (og_images.py, /api/og/... below).
 SITE_IMAGE = f"{SITE_BASE}/images/preview/gonka-vote.jpg"
 GOVERNANCE_IMAGE = f"{SITE_BASE}/images/preview/governance.jpg"
+NEW_PROPOSAL_IMAGE = f"{SITE_BASE}/images/preview/new-proposal.jpg"
 
 
 def _render(*, title: str, description: str, url: str, body: str, robots: str = INDEX,
@@ -183,8 +187,11 @@ async def og_proposal(proposal_id: str, request: Request) -> HTMLResponse:
     # catch-all can see it. It exists, it is just not content.
     if proposal_id == "new":
         return HTMLResponse(
-            _render(title=DEFAULT_TITLE, description=DEFAULT_DESCRIPTION, url=url,
-                    body="", robots=NOINDEX),
+            _render(title="Submit a proposal — Gonka Vote",
+                    description=("Propose an idea to the Gonka community: describe it, request "
+                                 "funding in USDT or GNK, and let GNK holders weigh in."),
+                    url=url, body="<h1>Submit a proposal</h1>", robots=NOINDEX,
+                    image=NEW_PROPOSAL_IMAGE),
             headers={"Cache-Control": "public, max-age=3600"},
         )
     try:
@@ -583,22 +590,112 @@ async def og_terms() -> HTMLResponse:
     )
 
 
+_UID_RE = re.compile(r"^u_[a-z0-9]{4,32}$")
+
+
+async def _member(uid: str) -> Optional[dict]:
+    """What the public profile page shows of a member: name, picture,
+    wallet, proposal count and GNK weight. Never the e-mail address, which
+    is only used here to count the member's proposals."""
+    ch = _ensure_ch()
+    u = await ch.query_one(
+        """
+        SELECT uid, email, name, image, wallet_address
+        FROM gonka_vote.users FINAL
+        WHERE uid = {uid:String}
+        LIMIT 1
+        """,
+        {"uid": uid},
+    )
+    if not u:
+        return None
+    n = await ch.query_scalar(
+        "SELECT count() FROM gonka_vote.proposals FINAL WHERE deleted_at IS NULL "
+        "AND (creator_email = {email:String} OR creator_uid = {uid:String})",
+        {"email": u["email"], "uid": uid},
+    )
+    w = await ch.query_one(
+        "SELECT toString(sum(balance_ngonka)) AS total FROM gonka_vote.wallet_links FINAL "
+        "WHERE account_uid = {uid:String} AND unlinked_at IS NULL",
+        {"uid": uid},
+    )
+    return {
+        "uid": uid,
+        "name": (u.get("name") or "").strip(),
+        "image": u.get("image") or "",
+        "wallet_address": u.get("wallet_address") or "",
+        "proposals": int(n or 0),
+        "weight": int((w or {}).get("total") or 0),
+    }
+
+
 @og_router.get("/u/{uid}", response_class=HTMLResponse)
 async def og_profile(uid: str) -> HTMLResponse:
-    # No database lookup: the users table also holds e-mail addresses, and a
-    # profile adds little a search result needs. noindex keeps member
-    # activity out of search while "follow" still passes the proposal links.
+    # noindex keeps member activity out of search while "follow" still passes
+    # the proposal links; a shared profile link still gets its own preview.
     url = f"{SITE_BASE}/u/{uid}"
+    m = None
+    if _UID_RE.match(uid):
+        try:
+            m = await _member(uid)
+        except Exception as e:
+            logger.warning("og profile %s: %s", uid, e)
+    if not m:
+        return HTMLResponse(
+            _render(title="Member profile — Gonka Vote", description=DEFAULT_DESCRIPTION,
+                    url=url, body="<h1>Member profile</h1>", robots=NOINDEX),
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+    name = m["name"] or "Gonka Vote member"
+    facts = [f"{m['proposals']:,} proposal{'' if m['proposals'] == 1 else 's'}"]
+    if m["weight"]:
+        facts.append(f"voting weight {og_images._gnk(m['weight'])}")
+    desc = f"{name} on Gonka Vote: " + " · ".join(facts) + "."
     return HTMLResponse(
-        _render(
-            title="Member profile — Gonka Vote",
-            description=DEFAULT_DESCRIPTION,
-            url=url,
-            body="<h1>Member profile</h1>",
-            robots=NOINDEX,
-        ),
+        _render(title=f"{name} — Gonka Vote", description=desc, url=url,
+                body=f"<h1>{html.escape(name)}</h1><p>{html.escape(desc)}</p>",
+                robots=NOINDEX, image=f"{SITE_BASE}/api/og/user/{uid}.png"),
         headers={"Cache-Control": "public, max-age=3600"},
     )
+
+
+# Pictures come from the sign-in provider (Google, Telegram). Fetch them only
+# from there, briefly and small, for the member's preview card.
+_PICTURE_HOSTS = ("googleusercontent.com", "t.me", "telegram.org")
+
+
+async def _picture(src: str) -> Optional[bytes]:
+    host = (urlparse(src).hostname or "") if src.startswith("https://") else ""
+    if not any(host == h or host.endswith("." + h) for h in _PICTURE_HOSTS):
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as c:
+            r = await c.get(src)
+        if r.status_code == 200 and len(r.content) <= 2_000_000:
+            return r.content
+    except Exception as e:
+        logger.info("og member picture: %s", e)
+    return None
+
+
+@og_router.get("/api/og/user/{uid}.png", include_in_schema=False)
+async def og_image_member(uid: str):
+    if not _UID_RE.match(uid):
+        return RedirectResponse(SITE_IMAGE, status_code=302)
+
+    async def make() -> bytes:
+        m = await _member(uid)
+        if not m:
+            raise LookupError(uid)
+        return await og_images.card_member(m, await _picture(m["image"]) if m["image"] else None)
+
+    try:
+        data = await og_images.cached(f"user/{uid}", 3600.0, make)
+    except Exception as e:
+        if not isinstance(e, LookupError):
+            logger.warning("og image member %s: %s", uid, e)
+        return RedirectResponse(SITE_IMAGE, status_code=302)
+    return _png(data, 3600.0)
 
 
 # ----------------------------------------------------------------------------

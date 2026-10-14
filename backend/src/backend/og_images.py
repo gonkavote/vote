@@ -170,14 +170,29 @@ def _png(img: Image.Image) -> bytes:
 def draw_card(kind_label: str, title: str, *, status: Optional[Tuple[str, tuple]] = None,
               subtitle: str = "", rows: List[Tuple[str, str]] = (), footer: str = "",
               tally: Optional[List[Tuple[str, float, tuple]]] = None,
-              badges: List[str] = ()) -> bytes:
+              badges: List[str] = (), avatar: Optional[Image.Image] = None) -> bytes:
     img, d = _base(kind_label, footer)
     width = W - 2 * PAD
+    tx = PAD
+    if avatar is not None:
+        # A member's picture, round, left of the name.
+        size = 112
+        av = avatar.convert("RGBA").resize((size, size), Image.LANCZOS)
+        mask = Image.new("L", (size, size), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
+        img.paste(av, (PAD, 172), mask)
+        d.ellipse((PAD, 172, PAD + size - 1, 172 + size - 1), outline=(51, 65, 85), width=3)
+        tx = PAD + size + 28
+        width = W - PAD - tx
     tf, lines = _fit_title(title, width, max_lines=3 if tally or badges else 2)
     y = 168
+    if avatar is not None and len(lines) == 1:
+        y = 172 + 56 - int(tf.size * 0.6)  # centred on the picture
     for line in lines:
-        d.text((PAD, y), line, font=tf, fill=WHITE)
+        d.text((tx, y), line, font=tf, fill=WHITE)
         y += int(tf.size * 1.18)
+    if avatar is not None:
+        y = max(y, 172 + 112 + 6)
     y += 14
     x = PAD
     if status:
@@ -467,6 +482,43 @@ async def card_governance(row: dict) -> bytes:
                        footer=f"gonka.vote/governance/{pid}")
 
 
+def _initial_avatar(name: str) -> Image.Image:
+    """The member's initial on the accent gradient, when there is no picture."""
+    size = 224
+    im = Image.new("RGBA", (size, size))
+    d = ImageDraw.Draw(im)
+    for i in range(size):  # diagonal-ish gradient, top to bottom
+        t = i / size
+        c = tuple(int(a + (b - a) * t) for a, b in zip((59, 130, 246), (192, 132, 252)))
+        d.line((0, i, size, i), fill=c + (255,))
+    ch = (name.strip()[:1] or "?").upper()
+    d.text((size // 2, size // 2), ch, font=_font("Bold", 120), fill=WHITE, anchor="mm")
+    return im
+
+
+async def card_member(profile: dict, picture: Optional[bytes]) -> bytes:
+    """A member's profile: name and picture, proposals made, GNK weight
+    behind their votes."""
+    name = (profile.get("name") or "").strip() or "Gonka Vote member"
+    avatar = None
+    if picture:
+        try:
+            avatar = Image.open(io.BytesIO(picture))
+            avatar.load()
+        except Exception:
+            avatar = None
+    if avatar is None:
+        avatar = _initial_avatar(name)
+    rows: List[Tuple[str, str]] = []
+    n = int(profile.get("proposals") or 0)
+    rows.append(("Proposals", f"{n:,}"))
+    rows.append(("Voting weight", _gnk(int(profile.get("weight") or 0))))
+    wallet = profile.get("wallet_address") or ""
+    return await _draw("Member", name, subtitle=_short(wallet, 12, 6) if wallet else "",
+                       rows=rows, avatar=avatar,
+                       footer=f"gonka.vote/u/{profile.get('uid', '')}")
+
+
 # ---------------------------------------------------------------- cache
 
 # Drawn cards by key, with the time drawn. A card is redrawn after its TTL:
@@ -500,6 +552,9 @@ async def cached(key: str, ttl: float, make) -> bytes:
 # Cards for the site's own pages, served as static files from
 # frontend/public/images/preview/ (redrawn by running this module).
 PAGES = {
+    "new-proposal": ("New proposal", "Propose an idea to the Gonka community",
+                     "Describe it, request funding in USDT or GNK, and let GNK holders weigh in.",
+                     ["Idea", "Funding request", "Discussion", "GNK-weighted poll"]),
     "governance": ("Governance", "Gonka on-chain governance",
                    "Every governance proposal, translated, with discussion and the votes cast.",
                    ["Upgrades", "Parameters", "Community spending", "Votes"]),
